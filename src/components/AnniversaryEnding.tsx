@@ -50,16 +50,19 @@ export function AnniversaryEnding() {
 
       {/* Main Closing Heading */}
       <h2 className="font-display text-4xl sm:text-6xl md:text-7xl text-[#F4F5FA] tracking-tight leading-tight max-w-3xl mb-6 text-glow-powder">
-        Two years of us. And so many more memories waiting to happen.
+        Two years. All ours. And still so many pages left to fill.
       </h2>
 
       {/* Closing Statement */}
       <div className="max-w-2xl mx-auto space-y-4 font-editorial text-lg sm:text-xl text-[#DCE7F5]/90 leading-relaxed font-light mb-12">
         <p>
-          No matter how vast the universe is, or how fast the world moves around us, being with you is the one place where time always feels like it belongs to us.
+          Every commute, every cafe corner, every Discord call that ran past midnight, every soda can
+          clinked against the other — none of it was nothing. All of it was ours.
         </p>
+
         <p className="italic text-[#B7D2F0]">
-          Thank you for every smile, every drive, every late night, and every single day of the past two years.
+          Thank you for two years of choosing me, for the blue ink note still pinned to the wall,
+          and for every ordinary day that became a memory I&apos;ll keep forever.
         </p>
       </div>
 

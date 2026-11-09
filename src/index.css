@@ -23,7 +23,7 @@
   }
 }
 
-/* Custom Typography Helpers */
+/* ─── Font Families ─────────────────────────────────────────── */
 .font-display {
   font-family: 'Instrument Serif', Georgia, serif;
 }
@@ -40,23 +40,48 @@
   font-family: 'DM Mono', monospace;
 }
 
-/* Hollow Display Typography */
+/* ─── Hollow + Noise-Glow Typography ─────────────────────────── */
 .text-hollow-powder {
   color: transparent;
-  -webkit-text-stroke: 1px rgba(183, 210, 240, 0.85);
-  text-shadow: 0 0 25px rgba(183, 210, 240, 0.4), 0 0 50px rgba(113, 143, 184, 0.2);
+  -webkit-text-stroke: 1.5px rgba(183, 210, 240, 0.9);
+  text-shadow:
+    0 0 20px rgba(183, 210, 240, 0.55),
+    0 0 55px rgba(113, 143, 184, 0.35),
+    0 0 90px rgba(113, 143, 184, 0.15);
+  animation: noiseGlowPulse 4s ease-in-out infinite;
+}
+
+.text-hollow-hero {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(183, 210, 240, 0.75);
+  text-shadow:
+    0 0 30px rgba(183, 210, 240, 0.6),
+    0 0 70px rgba(113, 143, 184, 0.4),
+    0 0 120px rgba(183, 210, 240, 0.2);
+  animation: noiseGlowPulse 4s ease-in-out infinite;
 }
 
 .text-glow-powder {
   color: #F4F5FA;
-  text-shadow: 0 0 16px rgba(183, 210, 240, 0.6), 0 0 32px rgba(113, 143, 184, 0.35);
+  text-shadow:
+    0 0 16px rgba(183, 210, 240, 0.6),
+    0 0 32px rgba(113, 143, 184, 0.35);
 }
 
 .text-glow-soft {
   text-shadow: 0 0 20px rgba(183, 210, 240, 0.3);
 }
 
-/* Liquid Glass System */
+.text-noise-glow {
+  color: #DCE7F5;
+  text-shadow:
+    0 0 12px rgba(183, 210, 240, 0.7),
+    0 0 28px rgba(113, 143, 184, 0.5),
+    0 0 48px rgba(183, 210, 240, 0.25);
+  animation: noiseGlowPulse 5s ease-in-out infinite;
+}
+
+/* ─── Liquid Glass System ────────────────────────────────────── */
 .liquid-glass {
   background: rgba(16, 24, 47, 0.55);
   backdrop-filter: blur(16px);
@@ -78,10 +103,50 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(183, 210, 240, 0.4);
-  box-shadow: 0 10px 40px 0 rgba(8, 13, 28, 0.6), 0 0 20px rgba(183, 210, 240, 0.2), inset 0 1px 2px rgba(220, 231, 245, 0.3);
+  box-shadow:
+    0 10px 40px 0 rgba(8, 13, 28, 0.6),
+    0 0 20px rgba(183, 210, 240, 0.2),
+    inset 0 1px 2px rgba(220, 231, 245, 0.3);
 }
 
-/* Watercolor Paper Canvas Effect */
+/* ─── Watercolor Image Treatment ─────────────────────────────── */
+.watercolor-frame {
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.watercolor-frame img {
+  filter:
+    saturate(0.72)
+    sepia(0.25)
+    brightness(0.92)
+    contrast(0.9);
+  mix-blend-mode: normal;
+}
+
+.watercolor-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 30% 20%, rgba(220, 231, 245, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 70% 80%, rgba(113, 143, 184, 0.14) 0%, transparent 60%);
+  mix-blend-mode: screen;
+}
+
+.watercolor-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='paper'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paper)' opacity='0.045'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
 .watercolor-card {
   position: relative;
   background: #0f1629;
@@ -101,12 +166,23 @@
   mix-blend-mode: overlay;
 }
 
-/* Film Grain Texture */
+/* ─── Film Grain / Noise Overlay ─────────────────────────────── */
 .film-grain {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
 }
 
-/* Cosmic Glow Gradients */
+.noise-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* ─── Nebula / Atmospheric Backgrounds ───────────────────────── */
 .radial-nebula {
   background: radial-gradient(ellipse 60% 40% at 50% 30%, rgba(113, 143, 184, 0.18) 0%, rgba(16, 24, 47, 0) 70%);
 }
@@ -115,7 +191,82 @@
   background: radial-gradient(ellipse 70% 50% at 50% 90%, rgba(183, 210, 240, 0.12) 0%, rgba(8, 13, 28, 0) 80%);
 }
 
-/* Custom Scrollbar */
+.afterglow-bg {
+  background:
+    radial-gradient(ellipse 100% 55% at 50% 0%, rgba(113, 143, 184, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 40% at 20% 60%, rgba(183, 210, 240, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 60% at 80% 80%, rgba(16, 24, 47, 0.95) 0%, transparent 70%),
+    #080D1C;
+}
+
+/* ─── Photo Memory Card ───────────────────────────────────────── */
+.memory-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.memory-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(8, 13, 28, 0.6) 80%,
+    rgba(8, 13, 28, 0.9) 100%
+  );
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.memory-card:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+.memory-card:hover::before {
+  opacity: 0.75;
+}
+
+.memory-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.8) brightness(0.88);
+  transition: filter 0.4s ease, transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.memory-card:hover img {
+  filter: saturate(0.95) brightness(0.95);
+  transform: scale(1.04);
+}
+
+/* ─── Orbital Ring Particles ─────────────────────────────────── */
+.orbit-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(183, 210, 240, 0.08);
+  animation: orbitRotate var(--orbit-dur, 20s) linear infinite;
+  pointer-events: none;
+}
+
+.orbit-dot {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: var(--dot-size, 3px);
+  height: var(--dot-size, 3px);
+  border-radius: 50%;
+  background: rgba(183, 210, 240, 0.9);
+  box-shadow: 0 0 6px 2px rgba(183, 210, 240, 0.5);
+  transform: translate(-50%, -50%);
+}
+
+/* ─── Custom Scrollbar ───────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -133,27 +284,28 @@
   background: rgba(183, 210, 240, 0.6);
 }
 
-/* Animations */
+/* ─── Keyframe Animations ────────────────────────────────────── */
 @keyframes slowSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .animate-slow-spin {
   animation: slowSpin 25s linear infinite;
 }
 
+@keyframes slowSpinReverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+.animate-slow-spin-reverse {
+  animation: slowSpinReverse 35s linear infinite;
+}
+
 @keyframes floatGentle {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-8px) rotate(0.8deg);
-  }
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-8px) rotate(0.8deg); }
 }
 
 .animate-float-gentle {
@@ -161,16 +313,124 @@
 }
 
 @keyframes pulseGlow {
-  0%, 100% {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.75;
-    transform: scale(1.05);
-  }
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%       { opacity: 0.75; transform: scale(1.05); }
 }
 
 .animate-pulse-glow {
   animation: pulseGlow 5s ease-in-out infinite;
+}
+
+@keyframes noiseGlowPulse {
+  0%, 100% {
+    text-shadow:
+      0 0 20px rgba(183, 210, 240, 0.55),
+      0 0 55px rgba(113, 143, 184, 0.35),
+      0 0 90px rgba(113, 143, 184, 0.12);
+  }
+  50% {
+    text-shadow:
+      0 0 28px rgba(183, 210, 240, 0.75),
+      0 0 70px rgba(113, 143, 184, 0.5),
+      0 0 110px rgba(183, 210, 240, 0.2);
+  }
+}
+
+@keyframes orbitRotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes orbitRotateReverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+@keyframes comet {
+  0%   { opacity: 0; transform: translateX(0) scaleX(1); }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translateX(120vw) scaleX(0.4); }
+}
+
+@keyframes shimmerSweep {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    rgba(183, 210, 240, 0.6) 0%,
+    rgba(220, 231, 245, 1) 40%,
+    rgba(183, 210, 240, 0.6) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmerSweep 4s linear infinite;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-vinyl {
+  animation: vinylSpin 2.8s linear infinite;
+}
+
+.animate-vinyl-paused {
+  animation: vinylSpin 2.8s linear infinite paused;
+}
+
+/* ─── SVG Noise Filter ────────────────────────────────────────── */
+.svg-noise-filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ─── Gallery Photo Filter ────────────────────────────────────── */
+.photo-afterglow {
+  filter:
+    saturate(0.65)
+    sepia(0.3)
+    hue-rotate(185deg)
+    brightness(0.9)
+    contrast(0.95);
+}
+
+.photo-afterglow-hover {
+  filter:
+    saturate(0.85)
+    sepia(0.15)
+    hue-rotate(185deg)
+    brightness(1.0)
+    contrast(1.0);
+}
+
+/* ─── Responsive Utilities ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slow-spin,
+  .animate-slow-spin-reverse,
+  .animate-float-gentle,
+  .animate-pulse-glow,
+  .animate-vinyl,
+  .text-hollow-powder,
+  .text-hollow-hero,
+  .text-noise-glow {
+    animation: none;
+  }
 }
