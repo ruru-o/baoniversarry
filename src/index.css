@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-afterglow: #10182F;
+    --color-midnight: #080D1C;
+    --color-powder: #B7D2F0;
+    --color-dusk: #718FB8;
+    --color-moonlight: #DCE7F5;
+    --color-softwhite: #F4F5FA;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #080D1C;
+  }
+
+  body {
+    background-color: #080D1C;
+    color: #F4F5FA;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Typography Helpers */
+.font-display {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+.font-editorial {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.font-handwritten {
+  font-family: 'Caveat', cursive;
+}
+
+.font-mono-code {
+  font-family: 'DM Mono', monospace;
+}
+
+/* Hollow Display Typography */
+.text-hollow-powder {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(183, 210, 240, 0.85);
+  text-shadow: 0 0 25px rgba(183, 210, 240, 0.4), 0 0 50px rgba(113, 143, 184, 0.2);
+}
+
+.text-glow-powder {
+  color: #F4F5FA;
+  text-shadow: 0 0 16px rgba(183, 210, 240, 0.6), 0 0 32px rgba(113, 143, 184, 0.35);
+}
+
+.text-glow-soft {
+  text-shadow: 0 0 20px rgba(183, 210, 240, 0.3);
+}
+
+/* Liquid Glass System */
+.liquid-glass {
+  background: rgba(16, 24, 47, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(183, 210, 240, 0.16);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 1px 0 rgba(220, 231, 245, 0.15);
+}
+
+.liquid-glass-subtle {
+  background: rgba(16, 24, 47, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(183, 210, 240, 0.1);
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.25);
+}
+
+.liquid-glass-active {
+  background: rgba(22, 34, 66, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(183, 210, 240, 0.4);
+  box-shadow: 0 10px 40px 0 rgba(8, 13, 28, 0.6), 0 0 20px rgba(183, 210, 240, 0.2), inset 0 1px 2px rgba(220, 231, 245, 0.3);
+}
+
+/* Watercolor Paper Canvas Effect */
+.watercolor-card {
+  position: relative;
+  background: #0f1629;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6), 0 0 40px rgba(113, 143, 184, 0.15);
+}
+
+.watercolor-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(183, 210, 240, 0.08) 1px, transparent 0);
+  background-size: 12px 12px;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+
+/* Film Grain Texture */
+.film-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+/* Cosmic Glow Gradients */
+.radial-nebula {
+  background: radial-gradient(ellipse 60% 40% at 50% 30%, rgba(113, 143, 184, 0.18) 0%, rgba(16, 24, 47, 0) 70%);
+}
+
+.radial-nebula-bottom {
+  background: radial-gradient(ellipse 70% 50% at 50% 90%, rgba(183, 210, 240, 0.12) 0%, rgba(8, 13, 28, 0) 80%);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080D1C;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(113, 143, 184, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(183, 210, 240, 0.6);
+}
+
+/* Animations */
+@keyframes slowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-slow-spin {
+  animation: slowSpin 25s linear infinite;
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.8deg);
+  }
+}
+
+.animate-float-gentle {
+  animation: floatGentle 6s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 5s ease-in-out infinite;
+}
