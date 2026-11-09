@@ -19,28 +19,28 @@ export function MemoryGallery({ onSelectPhoto }: MemoryGalleryProps) {
   return (
     <section
       id="gallery"
-      className="relative min-h-screen py-24 px-4 sm:px-6 max-w-7xl mx-auto z-10"
+      className="relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-7xl mx-auto z-10"
     >
       {/* Section Header */}
-      <div className="text-center mb-14">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-subtle text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-5">
-          <span style={{ fontSize: 9 }}>✦</span>
+      <div className="text-center mb-16">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#B7D2F0]" />
           <span>The Memory Archive</span>
-          <span style={{ fontSize: 9 }}>✦</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#B7D2F0]" />
         </div>
 
         <h2
-          className="font-display tracking-tight text-hollow-powder"
-          style={{ fontSize: 'clamp(2.5rem, 7vw, 5rem)' }}
+          className="font-display italic tracking-tight heading-luminous select-text"
+          style={{ fontSize: 'clamp(2.6rem, 6.5vw, 4.8rem)' }}
         >
           Preserved Moments
         </h2>
 
-        <p className="font-editorial italic text-lg text-[#718FB8] mt-3 font-light max-w-xl mx-auto">
-          Every ordinary afternoon that turned into something neither of us wants to forget.
+        <p className="font-editorial italic text-lg sm:text-xl text-[#718FB8] mt-3 font-light max-w-xl mx-auto">
+          Every ordinary afternoon that turned into something we never want to forget.
         </p>
 
-        {/* Filter Pills */}
+        {/* Filter Pills with Liquid Glass */}
         <div className="flex flex-wrap items-center justify-center gap-2 mt-8">
           {GALLERY_GROUPS.map((grp) => {
             const isActive = activeGroup === grp.id;
@@ -49,14 +49,14 @@ export function MemoryGallery({ onSelectPhoto }: MemoryGalleryProps) {
               <button
                 key={grp.id}
                 onClick={() => setActiveGroup(grp.id)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer ${
+                className={`px-4 py-1.5 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer active:scale-95 ${
                   isActive
-                    ? 'liquid-glass-active text-[#F4F5FA] shadow-[0_0_15px_rgba(183,210,240,0.25)] scale-105'
-                    : 'liquid-glass-subtle text-[#DCE7F5]/65 hover:text-white'
+                    ? 'liquid-pill-active text-[#F4F5FA] font-medium'
+                    : 'liquid-glass-card text-[#DCE7F5]/70 hover:text-white'
                 }`}
               >
                 <span>{grp.label}</span>
-                <span className="ml-1.5 text-[10px] opacity-55">({grp.count})</span>
+                <span className="ml-1.5 text-[10px] opacity-60">({grp.count})</span>
               </button>
             );
           })}
@@ -64,7 +64,7 @@ export function MemoryGallery({ onSelectPhoto }: MemoryGalleryProps) {
       </div>
 
       {/* Masonry Grid */}
-      <div className="columns-1 sm:columns-2 lg:columns-3 gap-5" style={{ columnGap: 20 }}>
+      <div className="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6">
         {filteredPhotos.map((photo, idx) => {
           const isHovered = hoveredId === photo.id;
 
@@ -74,99 +74,49 @@ export function MemoryGallery({ onSelectPhoto }: MemoryGalleryProps) {
               onClick={() => onSelectPhoto(photo)}
               onMouseEnter={() => setHoveredId(photo.id)}
               onMouseLeave={() => setHoveredId(null)}
-              className="break-inside-avoid cursor-pointer"
-              style={{
-                marginBottom: 20,
-                borderRadius: 10,
-                overflow: 'hidden',
-                border: '1px solid rgba(183,210,240,0.15)',
-                background: '#080D1C',
-                transform: isHovered ? 'translateY(-5px)' : 'translateY(0)',
-                boxShadow: isHovered
-                  ? '0 16px 48px rgba(8,13,28,0.85), 0 0 28px rgba(183,210,240,0.18)'
-                  : '0 4px 20px rgba(8,13,28,0.5)',
-                transition: 'transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.4s ease',
-              }}
+              className="break-inside-avoid cursor-pointer liquid-glass-card rounded-2xl overflow-hidden group select-none"
             >
-              {/* Image */}
-              <div
-                className="relative overflow-hidden"
-                style={{ background: '#050811' }}
-              >
+              {/* Photo Box */}
+              <div className="relative overflow-hidden aspect-auto bg-[#050811]">
                 <img
                   src={photo.thumbUrl}
                   alt={photo.title}
                   loading={idx < 4 ? 'eager' : 'lazy'}
-                  className="w-full h-auto object-cover"
+                  className="w-full h-auto object-cover transition-all duration-700 group-hover:scale-105"
                   style={{
-                    display: 'block',
                     filter: isHovered
-                      ? 'saturate(0.82) sepia(0.12) hue-rotate(185deg) brightness(0.96)'
-                      : 'saturate(0.65) sepia(0.28) hue-rotate(185deg) brightness(0.85)',
-                    transform: isHovered ? 'scale(1.04)' : 'scale(1)',
-                    transition: 'filter 0.5s ease, transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94)',
+                      ? 'saturate(1.0) brightness(1.0)'
+                      : 'saturate(0.75) sepia(0.18) hue-rotate(185deg) brightness(0.9)',
                   }}
                 />
 
-                {/* Gradient bottom vignette */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: 'linear-gradient(to top, rgba(8,13,28,0.75) 0%, rgba(8,13,28,0.15) 45%, transparent 100%)',
-                    opacity: isHovered ? 0.6 : 0.85,
-                    transition: 'opacity 0.3s ease',
-                  }}
-                />
+                {/* Subtle gradient vignette */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#080D1C] via-[#080D1C]/20 to-transparent opacity-85 group-hover:opacity-60 transition-opacity duration-300" />
 
-                {/* Noise grain overlay */}
+                {/* Expand badge */}
                 <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E")`,
-                    mixBlendMode: 'overlay',
-                  }}
-                />
-
-                {/* Expand icon */}
-                <div
-                  className="absolute top-3 right-3 p-1.5 rounded-full liquid-glass-subtle text-[#F4F5FA]"
-                  style={{
-                    opacity: isHovered ? 1 : 0,
-                    transition: 'opacity 0.25s ease',
-                  }}
+                  className="absolute top-3 right-3 p-2 rounded-full liquid-glass-panel text-[#F4F5FA] transition-opacity duration-300"
+                  style={{ opacity: isHovered ? 1 : 0 }}
                 >
-                  <Maximize2 style={{ width: 12, height: 12, color: '#B7D2F0' }} />
+                  <Maximize2 className="w-3.5 h-3.5 text-[#B7D2F0]" />
                 </div>
 
                 {/* Date tag */}
                 {photo.dateHint && (
-                  <div className="absolute top-3 left-3 px-2 py-0.5 rounded liquid-glass-subtle flex items-center gap-1 text-[#B7D2F0]">
-                    <Calendar style={{ width: 10, height: 10 }} />
-                    <span className="font-mono-code text-[9px] tracking-wide">{photo.dateHint}</span>
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full liquid-glass-panel text-[10px] font-mono-code text-[#B7D2F0] flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3 text-[#B7D2F0]" />
+                    <span>{photo.dateHint}</span>
                   </div>
                 )}
               </div>
 
-              {/* Card footer */}
-              <div
-                className="relative z-10"
-                style={{
-                  padding: '14px 16px',
-                  background: 'rgba(8,13,28,0.92)',
-                  borderTop: '1px solid rgba(183,210,240,0.08)',
-                }}
-              >
-                <h3
-                  className="font-display text-lg leading-tight"
-                  style={{
-                    color: isHovered ? '#B7D2F0' : '#F4F5FA',
-                    transition: 'color 0.3s ease',
-                  }}
-                >
+              {/* Card Footer */}
+              <div className="p-4 sm:p-5 relative z-10 bg-[#080D1C]/85 border-t border-[#B7D2F0]/10">
+                <h3 className="font-display italic text-xl text-[#F4F5FA] group-hover:text-[#B7D2F0] transition-colors duration-300">
                   {photo.title}
                 </h3>
 
-                <p className="font-editorial italic text-xs text-[#DCE7F5]/75 mt-1 leading-relaxed font-light">
+                <p className="font-editorial italic text-sm text-[#DCE7F5]/85 mt-1 leading-relaxed font-light">
                   &ldquo;{photo.statement}&rdquo;
                 </p>
               </div>

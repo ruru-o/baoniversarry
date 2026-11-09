@@ -13,7 +13,7 @@ export function ExpandedPhotoModal({
   photo,
   photos,
   onClose,
-  onSelectPhoto
+  onSelectPhoto,
 }: ExpandedPhotoModalProps) {
   useEffect(() => {
     if (!photo) return;
@@ -52,54 +52,52 @@ export function ExpandedPhotoModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#080D1C]/90 backdrop-blur-xl animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#080D1C]/85 backdrop-blur-2xl animate-fade-in"
       onClick={onClose}
     >
       {/* Container - Liquid Glass Frame */}
       <div
-        className="relative max-w-5xl w-full max-h-[92vh] flex flex-col lg:flex-row items-center liquid-glass rounded-2xl border border-[#B7D2F0]/30 shadow-2xl overflow-hidden"
+        className="relative max-w-5xl w-full max-h-[92vh] flex flex-col lg:flex-row items-center liquid-glass-panel rounded-3xl overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={onClose}
           aria-label="Close photo view"
-          className="absolute top-3 right-3 z-30 p-2 rounded-full liquid-glass-subtle text-[#DCE7F5] hover:text-white hover:bg-[#B7D2F0]/20 transition-all cursor-pointer"
+          className="absolute top-4 right-4 z-30 p-2.5 rounded-full liquid-glass-panel text-[#DCE7F5] hover:text-white transition-all cursor-pointer active:scale-95"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {/* Previous Button */}
         <button
           onClick={() => navigate(-1)}
           aria-label="Previous photo"
-          className="absolute left-3 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-3 rounded-full liquid-glass text-[#DCE7F5] hover:text-white hover:scale-110 transition-all cursor-pointer"
+          className="absolute left-3 top-1/2 -translate-y-1/2 z-30 p-2.5 sm:p-3 rounded-full liquid-glass-panel text-[#DCE7F5] hover:text-white transition-all cursor-pointer active:scale-95"
         >
-          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
 
         {/* Next Button */}
         <button
           onClick={() => navigate(1)}
           aria-label="Next photo"
-          className="absolute right-3 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-3 rounded-full liquid-glass text-[#DCE7F5] hover:text-white hover:scale-110 transition-all cursor-pointer lg:right-auto lg:left-[calc(55%+1rem)]"
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-30 p-2.5 sm:p-3 rounded-full liquid-glass-panel text-[#DCE7F5] hover:text-white transition-all cursor-pointer lg:right-auto lg:left-[calc(55%+1rem)] active:scale-95"
         >
-          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+          <ChevronRight className="w-5 h-5" />
         </button>
 
         {/* Left: Image Container */}
-        <div className="relative w-full lg:w-[58%] h-[50vh] sm:h-[60vh] lg:h-[85vh] bg-[#050811] flex items-center justify-center p-4 overflow-hidden">
+        <div className="relative w-full lg:w-[58%] h-[50vh] sm:h-[60vh] lg:h-[82vh] bg-[#050811] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
           <img
             src={photo.fullUrl}
             alt={photo.title}
-            className="max-h-full max-w-full object-contain rounded-lg shadow-2xl transition-all duration-300"
+            className="max-h-full max-w-full object-contain rounded-xl shadow-2xl transition-all duration-300"
           />
-          {/* Subtle film grain overlay */}
-          <div className="absolute inset-0 film-grain pointer-events-none opacity-40" />
         </div>
 
         {/* Right: Thoughtful Statement & Details */}
-        <div className="w-full lg:w-[42%] p-6 sm:p-8 flex flex-col justify-between overflow-y-auto max-h-[35vh] lg:max-h-[85vh]">
+        <div className="w-full lg:w-[42%] p-6 sm:p-8 flex flex-col justify-between overflow-y-auto max-h-[35vh] lg:max-h-[82vh]">
           <div>
             <div className="flex items-center justify-between text-xs font-mono-code text-[#718FB8] mb-3">
               <span className="flex items-center gap-1.5">
@@ -109,20 +107,20 @@ export function ExpandedPhotoModal({
               <span>{currentIndex + 1} / {total}</span>
             </div>
 
-            <h3 className="font-display text-2xl sm:text-3xl text-[#F4F5FA] mb-4">
+            <h3 className="font-display italic text-2xl sm:text-3xl text-[#F4F5FA] mb-4">
               {photo.title}
             </h3>
 
             {/* The Special Accompanying Statement */}
-            <blockquote className="relative p-4 rounded-xl liquid-glass-subtle border-l-2 border-[#B7D2F0] my-4">
-              <p className="font-editorial italic text-lg sm:text-xl text-[#DCE7F5] leading-relaxed font-light">
+            <blockquote className="relative p-4 rounded-xl liquid-glass-card border-l-2 border-[#B7D2F0] my-4">
+              <p className="font-editorial italic text-base sm:text-lg text-[#DCE7F5] leading-relaxed font-light">
                 &ldquo;{photo.statement}&rdquo;
               </p>
             </blockquote>
           </div>
 
           <div className="pt-4 border-t border-[#B7D2F0]/15 flex items-center justify-between text-xs text-[#718FB8] font-mono-code">
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#B7D2F0]" />
               <span>Wam &amp; Bao Archive</span>
             </span>

@@ -16,18 +16,23 @@ export function VinylPlayer() {
   return (
     <section
       id="soundtrack"
-      className="relative min-h-screen py-24 px-4 sm:px-6 max-w-6xl mx-auto z-10"
+      className="relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto z-10"
     >
       {/* Section Header */}
       <div className="text-center mb-16">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-subtle text-[#B7D2F0] text-xs font-mono-code uppercase tracking-wider mb-4">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-4">
           <Music className="w-3.5 h-3.5 text-[#B7D2F0]" />
           <span>Our Soundtrack</span>
         </div>
-        <h2 className="font-display text-4xl sm:text-6xl text-[#F4F5FA] tracking-tight text-glow-powder">
+
+        <h2
+          className="font-display italic tracking-tight heading-luminous select-text"
+          style={{ fontSize: 'clamp(2.6rem, 6.5vw, 4.8rem)' }}
+        >
           The Celestial Vinyl Collection
         </h2>
-        <p className="font-editorial italic text-xl text-[#718FB8] mt-2 font-light max-w-lg mx-auto">
+
+        <p className="font-editorial italic text-lg sm:text-xl text-[#718FB8] mt-3 font-light max-w-lg mx-auto">
           The songs we listened to on repeat, woven into the frequencies of our two years.
         </p>
 
@@ -42,10 +47,10 @@ export function VinylPlayer() {
                 onClick={() => {
                   setActiveIdx(idx);
                 }}
-                className={`px-5 py-2 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer flex items-center gap-2 ${
+                className={`px-5 py-2 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer flex items-center gap-2 active:scale-95 ${
                   isActive
-                    ? 'liquid-glass-active text-[#F4F5FA] border-[#B7D2F0] shadow-[0_0_20px_rgba(183,210,240,0.35)] scale-105'
-                    : 'liquid-glass-subtle text-[#DCE7F5]/70 hover:text-white hover:bg-[#B7D2F0]/15'
+                    ? 'liquid-pill-active text-[#F4F5FA] font-medium'
+                    : 'liquid-glass-card text-[#DCE7F5]/70 hover:text-white'
                 }`}
               >
                 <Disc3 className={`w-4 h-4 ${isActive ? 'text-[#B7D2F0]' : 'text-[#718FB8]'}`} />
@@ -57,36 +62,38 @@ export function VinylPlayer() {
       </div>
 
       {/* Interactive Turntable & Vinyl Deck */}
-      <div className="liquid-glass rounded-3xl p-6 sm:p-10 border border-[#B7D2F0]/25 shadow-2xl relative overflow-hidden">
+      <div className="liquid-glass-panel rounded-3xl p-6 sm:p-10 relative overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          
+
           {/* Left: Realistic Rotating Vinyl Record Deck */}
           <div className="lg:col-span-6 flex flex-col items-center justify-center relative py-6">
             <div className="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center">
-              
+
               {/* Outer Glow Halo */}
-              <div className={`absolute inset-0 rounded-full transition-opacity duration-700 blur-2xl ${
-                isPlaying ? 'bg-[#B7D2F0]/20 opacity-100' : 'bg-transparent opacity-0'
-              }`} />
+              <div
+                className={`absolute inset-0 rounded-full transition-opacity duration-700 blur-2xl ${
+                  isPlaying ? 'bg-[#B7D2F0]/20 opacity-100' : 'bg-transparent opacity-0'
+                }`}
+              />
 
               {/* Vinyl Disc Body */}
               <div
-                className={`relative w-full h-full rounded-full shadow-[0_15px_45px_rgba(0,0,0,0.9)] border-4 border-[#12192e] flex items-center justify-center transition-transform duration-700 ${
-                  isPlaying ? 'animate-slow-spin' : ''
+                className={`relative w-full h-full rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-4 border-[#12192e] flex items-center justify-center ${
+                  isPlaying ? 'animate-vinyl-spin' : 'animate-vinyl-spin-paused'
                 }`}
                 style={{
                   background: 'radial-gradient(circle, #0e1424 0%, #050811 50%, #151f38 70%, #080d1c 100%)',
-                  boxShadow: 'inset 0 0 40px rgba(0,0,0,0.9), 0 10px 40px rgba(0,0,0,0.8)'
+                  boxShadow: 'inset 0 0 40px rgba(0,0,0,0.9), 0 12px 40px rgba(0,0,0,0.8)',
                 }}
               >
-                {/* Vinyl Grooves (Micro rings) */}
+                {/* Vinyl Grooves */}
                 <div className="absolute inset-4 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-8 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-12 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-16 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-20 rounded-full border border-white/5 pointer-events-none" />
 
-                {/* Center Vinyl Label with Cover Art */}
+                {/* Center Vinyl Label */}
                 <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-[#B7D2F0]/40 shadow-inner flex items-center justify-center">
                   <img
                     src={currentPlaylist.coverUrl}
@@ -113,7 +120,7 @@ export function VinylPlayer() {
             <div className="flex items-center gap-4 mt-6">
               <button
                 onClick={toggleSpin}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full liquid-glass border border-[#B7D2F0]/40 text-[#F4F5FA] text-xs font-mono-code hover:bg-[#B7D2F0]/20 transition-all cursor-pointer shadow-lg hover:scale-105 active:scale-95"
+                className="liquid-glass-button inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[#F4F5FA] text-xs font-mono-code cursor-pointer active:scale-95"
               >
                 {isPlaying ? (
                   <>
@@ -130,14 +137,14 @@ export function VinylPlayer() {
 
               <button
                 onClick={() => setShowEmbed(prev => !prev)}
-                className="px-4 py-2.5 rounded-full liquid-glass-subtle text-xs font-mono-code text-[#B7D2F0] hover:text-white transition-all cursor-pointer"
+                className="liquid-glass-card px-4 py-2.5 rounded-full text-xs font-mono-code text-[#B7D2F0] hover:text-white transition-all cursor-pointer active:scale-95"
               >
                 {showEmbed ? 'Hide Player' : 'Show Spotify Player'}
               </button>
             </div>
           </div>
 
-          {/* Right: Playlist Information & Notes */}
+          {/* Right: Playlist Information */}
           <div className="lg:col-span-6 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 text-xs font-mono-code text-[#718FB8] mb-2">
@@ -145,7 +152,7 @@ export function VinylPlayer() {
                 <span>CURATED BY {currentPlaylist.curator.toUpperCase()}</span>
               </div>
 
-              <h3 className="font-display text-3xl sm:text-4xl text-[#F4F5FA] mb-2">
+              <h3 className="font-display italic text-3xl sm:text-4xl text-[#F4F5FA] mb-2">
                 {currentPlaylist.title}
               </h3>
 
@@ -157,7 +164,7 @@ export function VinylPlayer() {
                 {currentPlaylist.description}
               </p>
 
-              <div className="p-4 rounded-xl liquid-glass-subtle border border-[#B7D2F0]/15 space-y-2 mb-6 text-xs text-[#DCE7F5]/80 font-mono-code">
+              <div className="p-4 rounded-xl liquid-glass-card border border-[#B7D2F0]/15 space-y-2 mb-6 text-xs text-[#DCE7F5]/80 font-mono-code">
                 <div className="flex justify-between">
                   <span className="text-[#718FB8]">Curator</span>
                   <span>{currentPlaylist.curator}</span>
@@ -193,7 +200,7 @@ export function VinylPlayer() {
 
         {/* Live Spotify Embed Container (Expandable) */}
         {showEmbed && (
-          <div className="mt-8 pt-8 border-t border-[#B7D2F0]/15 animate-fade-in">
+          <div className="mt-8 pt-8 border-t border-[#B7D2F0]/15">
             <div className="flex items-center justify-between mb-3 text-xs font-mono-code text-[#718FB8]">
               <span>SPOTIFY EMBEDDED PLAYER · {currentPlaylist.curator}</span>
               <button
@@ -203,7 +210,7 @@ export function VinylPlayer() {
                 Close player
               </button>
             </div>
-            <div className="rounded-2xl overflow-hidden liquid-glass border border-[#B7D2F0]/30 shadow-2xl">
+            <div className="rounded-2xl overflow-hidden liquid-glass-panel shadow-2xl">
               <iframe
                 title={`Spotify Player - ${currentPlaylist.title}`}
                 src={currentPlaylist.embedUrl}

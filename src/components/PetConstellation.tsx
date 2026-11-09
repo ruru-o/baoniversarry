@@ -4,10 +4,9 @@ interface PetConstellationProps {
   onSelectPhoto: (photo: PhotoItem) => void;
 }
 
-// Paw print SVG icon
 function PawIcon({ size = 14, color = '#B7D2F0' }: { size?: number; color?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <ellipse cx="12" cy="17" rx="5" ry="4" fill={color} opacity="0.9" />
       <ellipse cx="6.5" cy="13" rx="2" ry="2.5" fill={color} opacity="0.75" />
       <ellipse cx="17.5" cy="13" rx="2" ry="2.5" fill={color} opacity="0.75" />
@@ -18,161 +17,113 @@ function PawIcon({ size = 14, color = '#B7D2F0' }: { size?: number; color?: stri
 }
 
 export function PetConstellation({ onSelectPhoto }: PetConstellationProps) {
-  // Constellation line path connecting the 4 card centers (approximate positions)
   return (
     <section
       id="pets"
-      className="relative py-24 px-4 sm:px-6 max-w-6xl mx-auto z-10"
+      className="relative py-24 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto z-10"
     >
       {/* Section Header */}
       <div className="text-center mb-16">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-subtle text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-5">
-          <PawIcon size={11} color="#B7D2F0" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-4">
+          <PawIcon size={12} color="#B7D2F0" />
           <span>Little Constellations</span>
-          <PawIcon size={11} color="#B7D2F0" />
+          <PawIcon size={12} color="#B7D2F0" />
         </div>
 
         <h2
-          className="font-display tracking-tight text-hollow-powder"
-          style={{ fontSize: 'clamp(2.2rem, 6vw, 4.5rem)' }}
+          className="font-display italic tracking-tight heading-luminous select-text"
+          style={{ fontSize: 'clamp(2.4rem, 6vw, 4.4rem)' }}
         >
           A Corner of Our Universe
         </h2>
 
-        <p className="font-editorial italic text-lg text-[#718FB8] mt-3 font-light max-w-md mx-auto">
+        <p className="font-editorial italic text-lg sm:text-xl text-[#718FB8] mt-3 font-light max-w-md mx-auto">
           Growing up alongside us — four chapters of soft, steady love.
         </p>
       </div>
 
-      {/* Grid + constellation lines */}
+      {/* Constellation Grid with Delicate Connecting Lines */}
       <div className="relative">
-        {/* Dashed constellation lines (decorative desktop only) */}
-        <div className="hidden lg:block absolute inset-0 pointer-events-none" aria-hidden>
+        {/* Subtle Constellation Lines (Desktop only) */}
+        <div className="hidden lg:block absolute inset-0 pointer-events-none" aria-hidden="true">
           <svg
-            className="w-full h-full"
+            className="w-full h-full opacity-35"
             viewBox="0 0 1000 420"
             fill="none"
             preserveAspectRatio="none"
           >
-            {/* Line connecting star node centers of the 4 cards */}
             <path
-              d="M 115 210 L 365 210 L 615 210 L 865 210"
-              stroke="rgba(183,210,240,0.18)"
+              d="M 125 210 L 375 210 L 625 210 L 875 210"
+              stroke="#B7D2F0"
               strokeWidth="1"
-              strokeDasharray="5 7"
+              strokeDasharray="4 8"
             />
-            {/* Star nodes */}
-            <circle cx="115" cy="210" r="3" fill="rgba(183,210,240,0.5)" />
-            <circle cx="365" cy="210" r="3" fill="rgba(183,210,240,0.4)" />
-            <circle cx="615" cy="210" r="3" fill="rgba(183,210,240,0.4)" />
-            <circle cx="865" cy="210" r="3" fill="rgba(183,210,240,0.5)" />
+            <circle cx="125" cy="210" r="3" fill="#B7D2F0" />
+            <circle cx="375" cy="210" r="3" fill="#B7D2F0" />
+            <circle cx="625" cy="210" r="3" fill="#B7D2F0" />
+            <circle cx="875" cy="210" r="3" fill="#B7D2F0" />
           </svg>
         </div>
 
-        {/* 4 Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 relative z-10">
+        {/* 4 Constellation Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
           {PET_PHOTOS.map((pet, idx) => (
-            <div
+            <article
               key={pet.id}
               onClick={() => onSelectPhoto(pet)}
-              className="group relative flex flex-col cursor-pointer"
-              style={{
-                borderRadius: 12,
-                overflow: 'hidden',
-                border: '1px solid rgba(183,210,240,0.18)',
-                background: 'rgba(8,13,28,0.75)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                transition: 'transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.4s ease',
-              }}
+              className="group relative flex flex-col liquid-glass-card rounded-2xl p-3 cursor-pointer select-none active:scale-95"
             >
-              {/* Star node header */}
-              <div
-                className="flex items-center justify-between px-3 py-2"
-                style={{ borderBottom: '1px solid rgba(183,210,240,0.1)' }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 5,
-                      height: 5,
-                      borderRadius: '50%',
-                      background: '#B7D2F0',
-                      boxShadow: '0 0 6px 2px rgba(183,210,240,0.5)',
-                    }}
-                  />
-                  <span className="font-mono-code text-[9px] text-[#B7D2F0] tracking-widest uppercase">
-                    Star 0{idx + 1}
-                  </span>
-                </div>
-
-                <span className="font-mono-code text-[9px] text-[#718FB8] tracking-wide">{pet.dateHint}</span>
+              {/* Star Node Header */}
+              <div className="flex items-center justify-between px-2 py-1 mb-2 text-[10px] font-mono-code text-[#718FB8]">
+                <span className="flex items-center gap-1.5 text-[#B7D2F0]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#B7D2F0] animate-beacon" />
+                  <span>STAR 0{idx + 1}</span>
+                </span>
+                <span>{pet.dateHint}</span>
               </div>
 
-              {/* Photo */}
-              <div
-                className="relative overflow-hidden"
-                style={{ aspectRatio: '3/4', background: '#050811' }}
-              >
+              {/* Photo Box */}
+              <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-[#050811]">
                 <img
                   src={pet.thumbUrl}
                   alt={pet.title}
                   loading="lazy"
-                  className="w-full h-full object-cover"
-                  style={{
-                    filter: 'saturate(0.72) sepia(0.2) hue-rotate(185deg) brightness(0.88)',
-                    transition: 'transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94), filter 0.5s ease',
-                  }}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  style={{ filter: 'saturate(0.9) contrast(0.98)' }}
                 />
 
-                {/* Gradient bottom */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: 'linear-gradient(to top, rgba(8,13,28,0.85) 0%, transparent 55%)',
-                  }}
-                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#080D1C]/90 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
                 {/* Paw watermark */}
-                <div
-                  className="absolute top-2.5 right-2.5 p-1.5 rounded-full"
-                  style={{
-                    background: 'rgba(8,13,28,0.5)',
-                    backdropFilter: 'blur(6px)',
-                  }}
-                >
-                  <PawIcon size={12} color="rgba(183,210,240,0.8)" />
+                <div className="absolute top-2 right-2 p-1.5 rounded-full liquid-glass-panel">
+                  <PawIcon size={12} color="#B7D2F0" />
                 </div>
               </div>
 
               {/* Caption */}
-              <div className="p-3.5">
-                <h3
-                  className="font-display text-lg text-[#F4F5FA] group-hover:text-[#B7D2F0]"
-                  style={{ transition: 'color 0.3s ease' }}
-                >
+              <div className="p-3 text-left">
+                <h3 className="font-display italic text-lg text-[#F4F5FA] group-hover:text-[#B7D2F0] transition-colors">
                   {pet.title}
                 </h3>
 
-                <p className="font-editorial italic text-xs text-[#DCE7F5]/75 mt-1 leading-relaxed font-light">
+                <p className="font-editorial italic text-xs text-[#DCE7F5]/80 mt-1 leading-relaxed font-light">
                   &ldquo;{pet.statement}&rdquo;
                 </p>
 
                 <div className="mt-2 text-right">
-                  <span className="font-handwritten text-sm text-[#B7D2F0]/70">
+                  <span className="font-handwritten text-sm text-[#B7D2F0]/80">
                     tap to view ✦
                   </span>
                 </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </div>
 
-      {/* Bottom note */}
+      {/* Bottom Note */}
       <div className="mt-12 text-center">
-        <p className="font-editorial text-sm text-[#718FB8] italic flex items-center justify-center gap-2 flex-wrap">
+        <p className="font-editorial text-sm sm:text-base text-[#718FB8] italic flex items-center justify-center gap-2 flex-wrap">
           <PawIcon size={13} color="#B7D2F0" />
           <span>Part of our daily routine, our peace, and our shared home.</span>
           <PawIcon size={13} color="#B7D2F0" />

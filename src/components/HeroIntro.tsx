@@ -1,71 +1,92 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Compass, ChevronDown, Sparkles } from 'lucide-react';
 
 interface HeroIntroProps {
   onEnter: () => void;
 }
 
-// Thin CSS orbital rings rendered as absolute-positioned divs
-// They encircle the h1, not drift through empty space
-function OrbitalRings() {
-  const rings = [
-    { size: 520,  dur: 22,  opacity: 0.18, reverse: false, dotSize: 3,   dotGlow: 8 },
-    { size: 680,  dur: 34,  opacity: 0.12, reverse: true,  dotSize: 4,   dotGlow: 10 },
-    { size: 820,  dur: 48,  opacity: 0.09, reverse: false, dotSize: 2.5, dotGlow: 6 },
-    { size: 940,  dur: 60,  opacity: 0.07, reverse: true,  dotSize: 3.5, dotGlow: 8 },
-  ] as const;
-
+// Delicate, vector-sharp celestial orbital stroke that gracefully encircles the heading
+function CelestialOrbitalTrail() {
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" aria-hidden>
-      {rings.map((ring, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full"
+    <div
+      className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-visible"
+      aria-hidden="true"
+    >
+      <svg
+        className="w-full max-w-5xl h-[340px] sm:h-[420px] overflow-visible opacity-75"
+        viewBox="0 0 900 360"
+        fill="none"
+      >
+        <defs>
+          {/* Subtle gradient for the luminous traveling comet trail */}
+          <linearGradient id="cometGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#B7D2F0" stopOpacity="0" />
+            <stop offset="50%" stopColor="#B7D2F0" stopOpacity="0.3" />
+            <stop offset="85%" stopColor="#DCE7F5" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="1" />
+          </linearGradient>
+
+          {/* Soft bloom filter for the orbital star */}
+          <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Faint static trajectory track */}
+        <ellipse
+          cx="450"
+          cy="180"
+          rx="410"
+          ry="130"
+          stroke="rgba(183, 210, 240, 0.12)"
+          strokeWidth="1"
+          strokeDasharray="4 8"
+        />
+
+        {/* Dynamic traveling luminous stroke */}
+        <ellipse
+          cx="450"
+          cy="180"
+          rx="410"
+          ry="130"
+          stroke="url(#cometGradient)"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeDasharray="160 880"
           style={{
-            width:  ring.size,
-            height: ring.size * 0.4, // squash to ellipse — matches perspective feel
-            border: `1px solid rgba(183,210,240,${ring.opacity})`,
-            animation: `${ring.reverse ? 'orbitRotateReverse' : 'orbitRotate'} ${ring.dur}s linear infinite`,
-            boxShadow: `0 0 20px 0 rgba(183,210,240,0.04)`,
+            animation: 'celestialOrbit 14s linear infinite',
+            transformOrigin: '450px 180px',
           }}
-        >
-          {/* Leading dot */}
-          <span
-            className="absolute rounded-full"
-            style={{
-              width:     ring.dotSize,
-              height:    ring.dotSize,
-              top:       '50%',
-              left:      '100%',
-              transform: 'translate(-50%,-50%)',
-              background: '#B7D2F0',
-              boxShadow: `0 0 ${ring.dotGlow}px ${ring.dotGlow / 2}px rgba(183,210,240,0.7)`,
-            }}
-          />
-          {/* Trailing dot at opposite pole */}
-          <span
-            className="absolute rounded-full"
-            style={{
-              width:     ring.dotSize * 0.7,
-              height:    ring.dotSize * 0.7,
-              top:       '50%',
-              left:      '0%',
-              transform: 'translate(-50%,-50%)',
-              background: 'rgba(113,143,184,0.6)',
-              boxShadow: `0 0 ${ring.dotGlow * 0.6}px ${ring.dotGlow * 0.3}px rgba(113,143,184,0.4)`,
-            }}
-          />
-        </div>
-      ))}
+        />
+
+        {/* Secondary counter-orbit (whisper thin) */}
+        <ellipse
+          cx="450"
+          cy="180"
+          rx="340"
+          ry="90"
+          stroke="rgba(220, 231, 245, 0.08)"
+          strokeWidth="1"
+          strokeDasharray="2 12"
+          transform="rotate(-5 450 180)"
+        />
+      </svg>
     </div>
   );
 }
 
 export function HeroIntro({ onEnter }: HeroIntroProps) {
-  const [revealed, setRevealed] = useState(false);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 300);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 100);
 
     return () => clearTimeout(timer);
   }, []);
@@ -73,121 +94,110 @@ export function HeroIntro({ onEnter }: HeroIntroProps) {
   return (
     <section
       id="intro"
-      className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-20 pb-16 z-10 text-center select-none overflow-hidden"
+      ref={heroRef}
+      className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 pt-28 pb-16 z-10 text-center select-none overflow-hidden"
     >
-      {/* Orbital rings centered on the title */}
-      <OrbitalRings />
+      {/* Delicate, vector-sharp celestial orbital trail (controlled, thin, elegant) */}
+      <CelestialOrbitalTrail />
 
-      {/* Inner nebula glow behind the title */}
+      {/* Atmospheric center illumination — very soft, deep diffuse light */}
       <div
-        className="absolute pointer-events-none"
+        className="absolute pointer-events-none -z-10"
         style={{
-          width:  600,
-          height: 300,
+          width: 'min(700px, 90vw)',
+          height: '350px',
           borderRadius: '50%',
-          background: 'radial-gradient(ellipse, rgba(113,143,184,0.14) 0%, transparent 70%)',
-          filter: 'blur(24px)',
+          background: 'radial-gradient(ellipse, rgba(113, 143, 184, 0.12) 0%, rgba(16, 24, 47, 0.04) 50%, transparent 75%)',
+          filter: 'blur(40px)',
         }}
-        aria-hidden
+        aria-hidden="true"
       />
 
-      {/* Date badge */}
+      {/* 01. Anniversary Date / Chapter Indicator (Apple-style Liquid Glass Pill) */}
       <div
-        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full liquid-glass-subtle border border-[#B7D2F0]/20 text-[#B7D2F0] mb-10 font-mono-code text-xs tracking-widest uppercase"
+        className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-8 sm:mb-10 transition-all duration-700"
         style={{
-          opacity:   revealed ? 1 : 0,
-          transform: revealed ? 'translateY(0)' : 'translateY(16px)',
-          transition: 'opacity 0.9s ease 0.2s, transform 0.9s ease 0.2s',
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(12px)',
         }}
       >
-        <span style={{ fontSize: 10 }}>✦</span>
-        Chapter II · November 12, 2026
-        <span style={{ fontSize: 10 }}>✦</span>
+        <span
+          className="inline-block w-2 h-2 rounded-full bg-[#B7D2F0] animate-beacon"
+          style={{ boxShadow: '0 0 8px #B7D2F0' }}
+        />
+        <span>Chapter II · November 12, 2026</span>
+        <span className="text-[#718FB8]/60">•</span>
+        <span className="text-[#DCE7F5]/80">Two Years</span>
       </div>
 
-      {/* Main hollow noise-glow title */}
-      <div className="relative">
+      {/* 02. Main Prominent Editorial Heading */}
+      <div
+        className="relative max-w-5xl mx-auto transition-all duration-1000 delay-150"
+        style={{
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(16px)',
+        }}
+      >
         <h1
-          ref={titleRef}
-          className="font-display tracking-tight leading-none text-hollow-powder"
-          style={{
-            fontSize: 'clamp(2.8rem, 10vw, 7.5rem)',
-            opacity:   revealed ? 1 : 0,
-            transform: revealed ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.97)',
-            transition: 'opacity 1.1s ease 0.5s, transform 1.1s cubic-bezier(0.25,0.46,0.45,0.94) 0.5s',
-          }}
+          className="font-display italic tracking-tight leading-[0.95] heading-luminous select-text"
+          style={{ fontSize: 'clamp(3.2rem, 9.5vw, 7.8rem)' }}
         >
           Happy Baoniversarry
         </h1>
 
-        {/* Subtitle — editorial italic */}
-        <p
-          className="font-editorial italic text-[#DCE7F5]/80 font-light tracking-wide mt-4"
-          style={{
-            fontSize: 'clamp(1.1rem, 3vw, 1.75rem)',
-            opacity:   revealed ? 1 : 0,
-            transform: revealed ? 'translateY(0)' : 'translateY(16px)',
-            transition: 'opacity 1s ease 0.9s, transform 1s ease 0.9s',
-          }}
-        >
-          Two years of us — written in light, kept between stars
+        <p className="font-editorial italic text-xl sm:text-2xl md:text-3xl text-[#DCE7F5] font-light tracking-wide mt-3 sm:mt-4 text-glow-soft">
+          Two years of us, preserved across our quiet universe
         </p>
       </div>
 
-      {/* The only "quote" — derived from an actual photo: the lockscreens at 8:32 AM Jan 25 */}
+      {/* 03. Authentic Personal Inscription (From actual lockscreen photo at 8:32 AM) */}
       <div
-        className="max-w-md mx-auto mt-10 px-4"
+        className="max-w-xl mx-auto mt-8 sm:mt-10 px-4 transition-all duration-1000 delay-300"
         style={{
-          opacity:   revealed ? 1 : 0,
-          transform: revealed ? 'translateY(0)' : 'translateY(16px)',
-          transition: 'opacity 1s ease 1.2s, transform 1s ease 1.2s',
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(14px)',
         }}
       >
-        <p className="font-editorial text-lg text-[#B7D2F0]/75 font-light leading-relaxed italic">
-          "Even our lock screens know where home is."
+        <p className="font-editorial text-lg sm:text-xl text-[#B7D2F0]/90 font-light leading-relaxed italic">
+          &ldquo;Even our lock screens know where home is — 8:32 AM on a quiet Saturday, two phones keeping each other company.&rdquo;
         </p>
 
-        <div className="flex items-center justify-center gap-3 mt-5 text-[#718FB8]/70 font-mono-code text-[10px] tracking-widest">
+        {/* Minimal metadata counter */}
+        <div className="flex items-center justify-center gap-3.5 mt-5 text-[#718FB8] font-mono-code text-[11px] tracking-widest">
           <span>WAM</span>
-          <span className="text-[#B7D2F0]/50">◦</span>
+          <span className="text-[#B7D2F0]/50">•</span>
           <span>BAO</span>
-          <span className="text-[#B7D2F0]/50">◦</span>
-          <span>731 DAYS</span>
+          <span className="text-[#B7D2F0]/50">•</span>
+          <span className="text-[#DCE7F5]">731 DAYS TOGETHER</span>
         </div>
       </div>
 
-      {/* CTA */}
+      {/* 04. Refined Interactive "Open Our Story" Liquid Glass Control */}
       <div
-        className="mt-14 flex flex-col items-center gap-4"
+        className="mt-12 sm:mt-14 flex flex-col items-center gap-5 transition-all duration-1000 delay-500"
         style={{
-          opacity:   revealed ? 1 : 0,
-          transition: 'opacity 1s ease 1.5s',
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(12px)',
         }}
       >
         <button
           onClick={onEnter}
-          className="group relative inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full liquid-glass border border-[#B7D2F0]/30 hover:border-[#B7D2F0]/60 text-[#F4F5FA] text-sm tracking-wide transition-all duration-300 hover:shadow-[0_0_30px_rgba(183,210,240,0.35)] hover:scale-105 active:scale-95 cursor-pointer"
+          className="liquid-glass-button group relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full text-[#F4F5FA] text-sm tracking-wide cursor-pointer"
         >
-          <span
-            style={{
-              display: 'inline-block',
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              background: '#B7D2F0',
-              boxShadow: '0 0 8px 3px rgba(183,210,240,0.5)',
-            }}
-          />
-          <span className="font-display italic text-base">Open Our Story</span>
+          <Sparkles className="w-4 h-4 text-[#B7D2F0] group-hover:rotate-12 transition-transform duration-300" />
+          <span className="font-display italic text-lg tracking-wide text-white">
+            Open Our Story
+          </span>
+          <Compass className="w-4 h-4 text-[#718FB8] group-hover:text-[#B7D2F0] transition-colors" />
         </button>
 
-        {/* Scroll hint */}
-        <div className="flex flex-col items-center gap-1 text-[#718FB8]/50 mt-3">
-          <span className="font-mono-code text-[9px] tracking-widest uppercase">scroll to explore</span>
-          <div
-            className="w-px bg-gradient-to-b from-[#718FB8]/40 to-transparent"
-            style={{ height: 32 }}
-          />
+        {/* Subtle, minimal scroll indicator with generous negative space */}
+        <div className="flex flex-col items-center gap-1.5 text-[#718FB8]/60 mt-3">
+          <span className="font-mono-code text-[9px] tracking-widest uppercase">
+            Scroll to explore
+          </span>
+          <div className="w-px h-7 bg-gradient-to-b from-[#718FB8]/40 to-transparent animate-pulse" />
+          <ChevronDown className="w-3.5 h-3.5 text-[#718FB8]/60 -mt-1" />
         </div>
       </div>
     </section>

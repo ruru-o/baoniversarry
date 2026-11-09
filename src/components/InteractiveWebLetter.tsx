@@ -31,9 +31,9 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
       content: [
         'I still keep this note right where I can see it. A smiling bunny giving a heart sign, a cat holding onto a teddy bear, and the words "HUBBY & WIPEY" scribbled in blue.',
         'It is funny how a piece of paper that took two minutes to draw can carry so much weight. In the hardest moments of these two years, looking at this reminder made everything simple again.',
-        'We were just two people who made a choice to protect each other, laugh together, and build something real.'
+        'We were just two people who made a choice to protect each other, laugh together, and build something real.',
       ],
-      handwrittenNote: 'Beebbii · Hubby & Wipey 💙'
+      handwrittenNote: 'Beebbii · Hubby & Wipey 💙',
     },
     {
       id: 'journal-lockscreen',
@@ -45,9 +45,9 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
       content: [
         'We put our phones down side-by-side on the bed and realized our lock screens were showing the exact same minute: 08:32.',
         'On my screen was you with your phone covering your face and your quiet smile. On your screen was me. It was not planned, but that is the beauty of it.',
-        'Home is not a location on a map. It is knowing that wherever we go, our minds are in the exact same place.'
+        'Home is not a location on a map. It is knowing that wherever we go, our minds are in the exact same place.',
       ],
-      handwrittenNote: 'waking up next to you'
+      handwrittenNote: 'waking up next to you',
     },
     {
       id: 'journal-discord',
@@ -59,9 +59,9 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
       content: [
         'There were nights when distance or tired schedules kept us behind our computer monitors, but even then, you made distance feel tiny.',
         'You looked into the webcam through your glasses with the blue ambient light shining on you, and I looked back with the red glow from my desk.',
-        'We would talk about our days, stay silent while working, or just laugh at random things until one of us fell asleep with the call still running.'
+        'We would talk about our days, stay silent while working, or just laugh at random things until one of us fell asleep with the call still running.',
       ],
-      handwrittenNote: 'our frequency in the dark ✨'
+      handwrittenNote: 'our frequency in the dark ✨',
     },
     {
       id: 'journal-rings',
@@ -73,10 +73,10 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
       content: [
         'You wore deep blue nail polish and I wore matching blue on my thumb. We both put on our simple black rings.',
         'You covered your face because you couldn’t stop laughing at whatever silly joke we made, and I gave that classic call-me hand sign.',
-        'I love that we can be sophisticated when we need to be, but with each other, we will always be the two funniest, happiest kids in the room.'
+        'I love that we can be sophisticated when we need to be, but with each other, we will always be the two funniest, happiest kids in the room.',
       ],
-      handwrittenNote: 'forever my favorite laugh'
-    }
+      handwrittenNote: 'forever my favorite laugh',
+    },
   ];
 
   const current = entries[activePage];
@@ -84,31 +84,36 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
   return (
     <section
       id="journal"
-      className="relative min-h-screen py-24 px-4 sm:px-6 max-w-6xl mx-auto z-10"
+      className="relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto z-10"
     >
       {/* Section Header */}
       <div className="text-center mb-16">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full liquid-glass-subtle text-[#B7D2F0] text-xs font-mono-code uppercase tracking-wider mb-4">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-4">
           <BookOpen className="w-3.5 h-3.5 text-[#B7D2F0]" />
           <span>The Memory Journal</span>
         </div>
-        <h2 className="font-display text-4xl sm:text-6xl text-[#F4F5FA] tracking-tight text-glow-powder">
+
+        <h2
+          className="font-display italic tracking-tight heading-luminous select-text"
+          style={{ fontSize: 'clamp(2.6rem, 6.5vw, 4.8rem)' }}
+        >
           Chapters We Wrote Together
         </h2>
-        <p className="font-editorial italic text-xl text-[#718FB8] mt-2 font-light max-w-md mx-auto">
+
+        <p className="font-editorial italic text-lg sm:text-xl text-[#718FB8] mt-3 font-light max-w-md mx-auto">
           Pages turned from our shared journal, preserved in liquid glass.
         </p>
 
         {/* Page Selector Tabs */}
-        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-8">
+        <div className="flex flex-wrap items-center justify-center gap-2.5 mt-8">
           {entries.map((entry, idx) => (
             <button
               key={entry.id}
               onClick={() => setActivePage(idx)}
-              className={`px-4 py-1.5 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer active:scale-95 ${
                 activePage === idx
-                  ? 'liquid-glass-active text-[#F4F5FA] border-[#B7D2F0] scale-105'
-                  : 'liquid-glass-subtle text-[#DCE7F5]/70 hover:text-white'
+                  ? 'liquid-pill-active text-[#F4F5FA] font-medium'
+                  : 'liquid-glass-card text-[#DCE7F5]/70 hover:text-white'
               }`}
             >
               <span>Entry 0{idx + 1}</span>
@@ -118,9 +123,9 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
       </div>
 
       {/* Main Journal Card */}
-      <article className="liquid-glass rounded-3xl p-6 sm:p-10 border border-[#B7D2F0]/25 shadow-2xl relative overflow-hidden transition-all duration-500">
+      <article className="liquid-glass-panel rounded-3xl p-6 sm:p-10 relative overflow-hidden transition-all duration-500">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          
+
           {/* Left: Featured Journal Photo Frame */}
           <div className="lg:col-span-5 flex flex-col items-center">
             <div
@@ -135,12 +140,12 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
                 width: 3000,
                 height: 4000,
                 aspectRatio: 0.75,
-                dateHint: current.date
+                dateHint: current.date,
               })}
-              className="relative group w-full max-w-sm rounded-2xl overflow-hidden liquid-glass border border-[#B7D2F0]/30 shadow-2xl cursor-pointer"
+              className="relative group w-full max-w-sm rounded-2xl overflow-hidden liquid-glass-card cursor-pointer select-none"
             >
               {/* Paper Pin Decor */}
-              <div className="absolute top-3 left-3 z-20 flex items-center gap-1 px-2.5 py-1 rounded-full liquid-glass-subtle text-[10px] font-mono-code text-[#B7D2F0]">
+              <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full liquid-glass-panel text-[10px] font-mono-code text-[#B7D2F0]">
                 <Pin className="w-3 h-3 text-[#B7D2F0]" />
                 <span>Pinned Artifact</span>
               </div>
@@ -171,7 +176,7 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
                 <span>ENTRY 0{activePage + 1} OF 0{entries.length}</span>
               </div>
 
-              <h3 className="font-display text-3xl sm:text-4xl text-[#F4F5FA] mb-2">
+              <h3 className="font-display italic text-3xl sm:text-4xl text-[#F4F5FA] mb-2">
                 {current.title}
               </h3>
 
@@ -198,7 +203,7 @@ export function InteractiveWebLetter({ onSelectPhoto }: InteractiveWebLetterProp
               {activePage < entries.length - 1 ? (
                 <button
                   onClick={() => setActivePage(p => p + 1)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full liquid-glass-subtle text-xs font-mono-code text-[#F4F5FA] hover:text-[#B7D2F0] transition-colors cursor-pointer"
+                  className="liquid-glass-card inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-mono-code text-[#F4F5FA] hover:text-[#B7D2F0] transition-colors cursor-pointer active:scale-95"
                 >
                   <span>Next Chapter</span>
                   <ChevronRight className="w-3.5 h-3.5" />
