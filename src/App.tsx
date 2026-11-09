@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { CosmicCanvas } from './components/Three/CosmicCanvas';
 import { Navigation } from './components/Navigation';
 import { HeroIntro } from './components/HeroIntro';
-import { AnniversaryLetter } from './components/AnniversaryLetter';
-import { MemoryGallery } from './components/MemoryGallery';
-import { PetConstellation } from './components/PetConstellation';
+import { ContinuousGallery } from './components/ContinuousGallery';
 import { VinylPlayer } from './components/VinylPlayer';
-import { InteractiveWebLetter } from './components/InteractiveWebLetter';
+import { AnniversaryLetter } from './components/AnniversaryLetter';
 import { AnniversaryEnding } from './components/AnniversaryEnding';
 import { ExpandedPhotoModal } from './components/ExpandedPhotoModal';
 import { ALL_PHOTOS, type PhotoItem } from './data/photos';
@@ -16,7 +14,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string>('intro');
 
   useEffect(() => {
-    const sections = ['intro', 'letter', 'gallery', 'pets', 'soundtrack', 'journal', 'future'];
+    const sections = ['intro', 'gallery', 'soundtrack', 'letter', 'future'];
     const observers: IntersectionObserver[] = [];
 
     sections.forEach((id) => {
@@ -45,46 +43,40 @@ export default function App() {
   }, []);
 
   const handleEnter = () => {
-    const letterEl = document.getElementById('letter');
+    const galleryEl = document.getElementById('gallery');
 
-    if (letterEl) {
-      letterEl.scrollIntoView({ behavior: 'smooth' });
+    if (galleryEl) {
+      galleryEl.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
   return (
-    <div className="relative min-h-screen bg-[#080D1C] text-[#F4F5FA] selection:bg-[#718FB8]/40 selection:text-[#DCE7F5]">
-      {/* 3D Cosmic Atmosphere in Background */}
+    <div className="relative min-h-screen bg-[#060814] text-[#F4F5FA] selection:bg-[#718FB8]/40 selection:text-[#DCE7F5]">
+      {/* Photographic Fine-Grain Galaxy Backdrop */}
       <CosmicCanvas />
 
-      {/* Floating Navigation Dock */}
+      {/* Floating Liquid Glass Navigation Dock */}
       <Navigation activeSection={activeSection} />
 
       {/* Main Experience Flow */}
       <main className="relative z-10">
-        {/* 01: Hero Intro */}
+        {/* 01: Hero Intro with Hollow Display Lettering */}
         <HeroIntro onEnter={handleEnter} />
 
-        {/* 02: Anniversary Letter & Watercolor Portrait */}
-        <AnniversaryLetter />
+        {/* 02: One Continuous Interactive Spatial Gallery (All 21 Photos + Signature Constellations) */}
+        <ContinuousGallery onSelectPhoto={setSelectedPhoto} />
 
-        {/* 03: Interactive Memory Gallery */}
-        <MemoryGallery onSelectPhoto={setSelectedPhoto} />
-
-        {/* 04: Pet Constellation */}
-        <PetConstellation onSelectPhoto={setSelectedPhoto} />
-
-        {/* 05: Celestial Spotify Vinyl Player */}
+        {/* 03: Physical Interactive Spotify Vinyl with Music Playback */}
         <VinylPlayer />
 
-        {/* 06: Interactive Memory Journal */}
-        <InteractiveWebLetter onSelectPhoto={setSelectedPhoto} />
+        {/* 04: The Anniversary Letter (Archival Watercolor Portrait & Sincere Letter) */}
+        <AnniversaryLetter />
 
-        {/* 07: Closing Starlight Ending */}
+        {/* 05: Quiet Celestial Closing */}
         <AnniversaryEnding />
       </main>
 
-      {/* Global Expanded Photo Viewer Modal */}
+      {/* High-Resolution Fullscreen Photo Modal */}
       <ExpandedPhotoModal
         photo={selectedPhoto}
         photos={ALL_PHOTOS}

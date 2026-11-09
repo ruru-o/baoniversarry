@@ -2,77 +2,138 @@ import { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-// Generates a smooth, anti-aliased circular particle texture (prevents GPU square point artifacts)
-function createCircleTexture(): THREE.Texture {
-  const size = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
+// Custom GLSL Shader for fine-grain, photographic galaxy stars
+// Ensures 100% round, anti-aliased microscopic pinprick stars with organic density & subtle twinkle
+const galaxyVertexShader = `
+  attribute float aSize;
+  attribute float aBrightness;
+  attribute float aTwinkleSpeed;
+  attribute float aSeed;
+  attribute vec3 aColor;
 
-  if (ctx) {
-    const center = size / 2;
-    const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.2, 'rgba(220, 231, 245, 0.9)');
-    gradient.addColorStop(0.5, 'rgba(183, 210, 240, 0.4)');
-    gradient.addColorStop(1, 'rgba(183, 210, 240, 0)');
+  uniform float uTime;
+  uniform float uPixelRatio;
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, size, size);
+  varying vec3 vColor;
+  varying float vAlpha;
+
+  void main() {
+    vColor = aColor;
+
+    // Organic, delicate twinkle: some stars twinkle gently, others stay steady
+    float twinkle = sin(uTime * aTwinkleSpeed + aSeed * 6.28318) * 0.35 + 0.65;
+    vAlpha = aBrightness * twinkle;
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+
+    // Microscopic stardust sizing, distance attenuated, clamped for pinprick sharpness
+    float dist = length(mvPosition.xyz);
+    gl_PointSize = clamp((aSize * uPixelRatio * 18.0) / dist, 0.6, 2.4);
   }
+`;
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.generateMipmaps = true;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
+const galaxyFragmentShader = `
+  varying vec3 vColor;
+  varying float vAlpha;
 
-  return texture;
-}
+  void main() {
+    // Perfect circular Gaussian point falloff (prevents square artifacts)
+    vec2 coord = gl_PointCoord - vec2(0.5);
+    float dist = length(coord);
 
-// Minimal, serene stardust backdrop — faint pinprick stars, calm & elegant
-function MinimalStarfield({ count = 800 }: { count?: number }) {
+    if (dist > 0.5) {
+      discard;
+    }
+
+    // Soft photographic point profile
+    float strength = smoothstep(0.5, 0.05, dist);
+    gl_FragColor = vec4(vColor, vAlpha * strength);
+  }
+`;
+
+function PhotographicGalaxy({ count = 1800 }: { count?: number }) {
   const pointsRef = useRef<THREE.Points>(null);
-  const texture = useMemo(() => createCircleTexture(), []);
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
 
-  const [positions, colors, sizes] = useMemo(() => {
+  const [positions, colors, sizes, brightness, twinkleSpeed, seeds] = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
     const sz = new Float32Array(count);
+    const br = new Float32Array(count);
+    const sp = new Float32Array(count);
+    const sd = new Float32Array(count);
 
-    const colorA = new THREE.Color('#B7D2F0'); // Powder blue
-    const colorB = new THREE.Color('#DCE7F5'); // Moonlight
-    const colorC = new THREE.Color('#F4F5FA'); // Pure starlight
-    const colorD = new THREE.Color('#718FB8'); // Soft dusk
+    const cPowder = new THREE.Color('#B7D2F0');
+    const cMoonlight = new THREE.Color('#DCE7F5');
+    const cWhite = new THREE.Color('#F4F5FA');
+    const cDusk = new THREE.Color('#718FB8');
 
     for (let i = 0; i < count; i++) {
-      // Distribute widely in sphere
-      const radius = 25 + Math.random() * 55;
-      const theta = 2 * Math.PI * Math.random();
-      const phi = Math.acos(2 * Math.random() - 1);
+      // Organic celestial distribution: clustered along a subtle galactic arc
+      const isCluster = Math.random() < 0.6;
+      let x: number;
+      let y: number;
+      let z: number;
 
-      pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = radius * Math.cos(phi);
+      if (isCluster) {
+        // Subtle diagonal galactic band with random dispersion
+        const t = (Math.random() - 0.5) * 50;
+        const spread = (Math.random() - 0.5) * 14;
+        const depth = (Math.random() - 0.5) * 20;
 
-      const r = Math.random();
-      const c = r < 0.4 ? colorA : r < 0.7 ? colorB : r < 0.88 ? colorC : colorD;
+        x = t + spread * 0.5;
+        y = t * 0.45 + spread;
+        z = -15 + depth;
+      } else {
+        // Deep background field
+        const radius = 20 + Math.random() * 45;
+        const theta = 2 * Math.PI * Math.random();
+        const phi = Math.acos(2 * Math.random() - 1);
 
-      col[i * 3] = c.r;
-      col[i * 3 + 1] = c.g;
-      col[i * 3 + 2] = c.b;
+        x = radius * Math.sin(phi) * Math.cos(theta);
+        y = radius * Math.sin(phi) * Math.sin(theta);
+        z = -12 + radius * Math.cos(phi) * 0.6;
+      }
 
-      // Microscopic sizes for realistic starlight pinpricks
-      sz[i] = 0.8 + Math.random() * 1.4;
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = y;
+      pos[i * 3 + 2] = z;
+
+      // Color variation: fine powder blues, moonlight silver, soft whites
+      const rColor = Math.random();
+      const chosenColor = rColor < 0.35 ? cPowder : rColor < 0.65 ? cMoonlight : rColor < 0.85 ? cWhite : cDusk;
+
+      col[i * 3] = chosenColor.r;
+      col[i * 3 + 1] = chosenColor.g;
+      col[i * 3 + 2] = chosenColor.b;
+
+      // Most stars are tiny pinpricks; very few slightly brighter
+      sz[i] = Math.random() < 0.85 ? 0.6 + Math.random() * 0.6 : 1.2 + Math.random() * 0.6;
+      br[i] = 0.25 + Math.random() * 0.65;
+      sp[i] = 0.4 + Math.random() * 1.2;
+      sd[i] = Math.random();
     }
 
-    return [pos, col, sz];
+    return [pos, col, sz, br, sp, sd];
   }, [count]);
 
-  useFrame((_, delta) => {
+  const uniforms = useMemo(() => {
+    return {
+      uTime: { value: 0 },
+      uPixelRatio: { value: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1 },
+    };
+  }, []);
+
+  useFrame((state, delta) => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = state.clock.getElapsedTime();
+    }
+
     if (pointsRef.current) {
-      // Serene, near-imperceptible drift
-      pointsRef.current.rotation.y += delta * 0.003;
-      pointsRef.current.rotation.x += delta * 0.0015;
+      // Extremely slow, serene celestial drift
+      pointsRef.current.rotation.y += delta * 0.0018;
+      pointsRef.current.rotation.z += delta * 0.0008;
     }
   });
 
@@ -80,76 +141,32 @@ function MinimalStarfield({ count = 800 }: { count?: number }) {
     <points ref={pointsRef}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-        <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
+        <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
+        <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
+        <bufferAttribute attach="attributes-aBrightness" args={[brightness, 1]} />
+        <bufferAttribute attach="attributes-aTwinkleSpeed" args={[twinkleSpeed, 1]} />
+        <bufferAttribute attach="attributes-aSeed" args={[seeds, 1]} />
       </bufferGeometry>
-      <pointsMaterial
-        size={1.1}
-        map={texture}
-        vertexColors
+      <shaderMaterial
+        ref={materialRef}
+        vertexShader={galaxyVertexShader}
+        fragmentShader={galaxyFragmentShader}
+        uniforms={uniforms}
         transparent
-        opacity={0.65}
-        blending={THREE.AdditiveBlending}
         depthWrite={false}
+        blending={THREE.AdditiveBlending}
       />
     </points>
   );
 }
 
-// Delicate foreground stardust motes (few, gentle, calm)
-function FloatingStardustMotes({ count = 35 }: { count?: number }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const texture = useMemo(() => createCircleTexture(), []);
-
-  const [positions, scales] = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const sc = new Float32Array(count);
-
-    for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 22;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 16;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
-      sc[i] = 1.0 + Math.random() * 1.5;
-    }
-
-    return [pos, sc];
-  }, [count]);
-
-  useFrame((state) => {
-    if (groupRef.current) {
-      const t = state.clock.getElapsedTime() * 0.15;
-      groupRef.current.position.y = Math.sin(t) * 0.25;
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-          <bufferAttribute attach="attributes-size" args={[scales, 1]} />
-        </bufferGeometry>
-        <pointsMaterial
-          size={1.8}
-          map={texture}
-          color="#B7D2F0"
-          transparent
-          opacity={0.4}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </points>
-    </group>
-  );
-}
-
 // Gentle, restrained mouse parallax
-function CameraParallax() {
+function GalaxyCameraParallax() {
   useFrame((state) => {
-    const pointer = state.pointer;
-    state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, pointer.x * 0.6, 0.025);
-    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, pointer.y * 0.4, 0.025);
-    state.camera.lookAt(0, 0, 0);
+    const p = state.pointer;
+    state.camera.position.x = THREE.MathUtils.lerp(state.camera.position.x, p.x * 0.5, 0.02);
+    state.camera.position.y = THREE.MathUtils.lerp(state.camera.position.y, p.y * 0.35, 0.02);
+    state.camera.lookAt(0, 0, -10);
   });
 
   return null;
@@ -161,14 +178,15 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
       className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
       style={{
         background: `
-          radial-gradient(ellipse 70% 45% at 50% 15%, rgba(113, 143, 184, 0.09) 0%, transparent 65%),
-          radial-gradient(ellipse 60% 50% at 85% 75%, rgba(16, 24, 47, 0.7) 0%, transparent 65%),
-          #080D1C
+          radial-gradient(ellipse 90% 60% at 50% 20%, rgba(113, 143, 184, 0.07) 0%, transparent 70%),
+          radial-gradient(ellipse 70% 50% at 80% 75%, rgba(16, 24, 47, 0.55) 0%, transparent 65%),
+          #060814
         `,
       }}
     >
+      {/* Delicate photographic galaxy canvas */}
       <Canvas
-        camera={{ position: [0, 0, 16], fov: 55 }}
+        camera={{ position: [0, 0, 15], fov: 50 }}
         dpr={[1, 2]}
         gl={{
           antialias: true,
@@ -176,17 +194,22 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           powerPreference: 'high-performance',
         }}
       >
-        <color attach="background" args={['#080D1C']} />
-        <fog attach="fog" args={['#080D1C', 20, 70]} />
+        <color attach="background" args={['#060814']} />
+        <fog attach="fog" args={['#060814', 15, 65]} />
 
-        {/* Crisp, serene, microscopic pinprick starfield */}
-        <MinimalStarfield count={750} />
+        <PhotographicGalaxy count={1600} />
 
-        {/* Very subtle floating stardust motes */}
-        <FloatingStardustMotes count={30} />
-
-        {interactive && <CameraParallax />}
+        {interactive && <GalaxyCameraParallax />}
       </Canvas>
+
+      {/* Extremely subtle film grain overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.03]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+        aria-hidden="true"
+      />
     </div>
   );
 }

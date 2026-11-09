@@ -1,84 +1,144 @@
-import { useState } from 'react';
-import { Music, Play, Pause, ExternalLink, Disc3, Sparkles } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Play, Pause, ExternalLink, Disc3 } from 'lucide-react';
 import { SPOTIFY_PLAYLISTS } from '../data/photos';
+
+// Synthesizes a soft, subtle analog vinyl needle drop & switch sound using the Web Audio API
+function playMechanicalAudioFeedback(type: 'needle' | 'click' = 'needle') {
+  try {
+    const AudioContextClass = window.AudioContext;
+
+    if (!AudioContextClass) return;
+
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+
+    if (type === 'needle') {
+      // Gentle stylus landing: low filtered noise burst + soft pop
+      const bufferSize = ctx.sampleRate * 0.12;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(450, now);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(now);
+    } else {
+      // Tactile button click
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(120, now + 0.04);
+
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.04);
+    }
+  } catch {
+    // AudioContext blocked or unsupported; silent fallback
+  }
+}
 
 export function VinylPlayer() {
   const [activeIdx, setActiveIdx] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [showEmbed, setShowEmbed] = useState<boolean>(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const currentPlaylist = SPOTIFY_PLAYLISTS[activeIdx];
 
-  const toggleSpin = () => {
-    setIsPlaying(prev => !prev);
+  const handleTogglePlay = () => {
+    const nextState = !isPlaying;
+    setIsPlaying(nextState);
+    playMechanicalAudioFeedback(nextState ? 'needle' : 'click');
+  };
+
+  const handleSelectPlaylist = (idx: number) => {
+    if (idx === activeIdx) return;
+
+    setActiveIdx(idx);
+    playMechanicalAudioFeedback('click');
   };
 
   return (
     <section
       id="soundtrack"
-      className="relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto z-10"
+      className="relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-5xl mx-auto z-10 select-none"
     >
       {/* Section Header */}
       <div className="text-center mb-16">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full liquid-glass-panel text-[#B7D2F0] text-xs font-mono-code uppercase tracking-widest mb-4">
-          <Music className="w-3.5 h-3.5 text-[#B7D2F0]" />
-          <span>Our Soundtrack</span>
-        </div>
-
         <h2
           className="font-display italic tracking-tight heading-luminous select-text"
-          style={{ fontSize: 'clamp(2.6rem, 6.5vw, 4.8rem)' }}
+          style={{ fontSize: 'clamp(2.4rem, 6vw, 4.4rem)' }}
         >
-          The Celestial Vinyl Collection
+          Soundtrack
         </h2>
 
-        <p className="font-editorial italic text-lg sm:text-xl text-[#718FB8] mt-3 font-light max-w-lg mx-auto">
-          The songs we listened to on repeat, woven into the frequencies of our two years.
-        </p>
-
         {/* Playlist Switcher Tabs */}
-        <div className="flex items-center justify-center gap-3 mt-8">
+        <div className="flex items-center justify-center gap-3 mt-6">
           {SPOTIFY_PLAYLISTS.map((pl, idx) => {
             const isActive = activeIdx === idx;
 
             return (
               <button
                 key={pl.id}
-                onClick={() => {
-                  setActiveIdx(idx);
-                }}
+                onClick={() => handleSelectPlaylist(idx)}
                 className={`px-5 py-2 rounded-full text-xs font-mono-code transition-all duration-300 cursor-pointer flex items-center gap-2 active:scale-95 ${
                   isActive
                     ? 'liquid-pill-active text-[#F4F5FA] font-medium'
                     : 'liquid-glass-card text-[#DCE7F5]/70 hover:text-white'
                 }`}
               >
-                <Disc3 className={`w-4 h-4 ${isActive ? 'text-[#B7D2F0]' : 'text-[#718FB8]'}`} />
-                <span>{pl.curator}&apos;s Side ({pl.subtitle})</span>
+                <Disc3 className={`w-3.5 h-3.5 ${isActive ? 'text-[#B7D2F0]' : 'text-[#718FB8]'}`} />
+                <span>{pl.name}&apos;s Side ({pl.subtitle})</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Interactive Turntable & Vinyl Deck */}
+      {/* Physical Turntable & Interactive Vinyl Deck */}
       <div className="liquid-glass-panel rounded-3xl p-6 sm:p-10 relative overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
 
-          {/* Left: Realistic Rotating Vinyl Record Deck */}
-          <div className="lg:col-span-6 flex flex-col items-center justify-center relative py-6">
-            <div className="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center">
+          {/* Left: Physical Turntable with Grooves & Tonearm */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-center py-4">
+            <div className="relative w-64 h-64 sm:w-76 sm:h-76 flex items-center justify-center">
 
-              {/* Outer Glow Halo */}
+              {/* Tonearm Stylus */}
               <div
-                className={`absolute inset-0 rounded-full transition-opacity duration-700 blur-2xl ${
-                  isPlaying ? 'bg-[#B7D2F0]/20 opacity-100' : 'bg-transparent opacity-0'
-                }`}
-              />
+                className="absolute -top-3 right-2 w-28 h-32 pointer-events-none transition-transform duration-700 origin-top-right z-30"
+                style={{
+                  transform: isPlaying ? 'rotate(18deg)' : 'rotate(-10deg)',
+                }}
+              >
+                <div className="w-1.5 h-26 bg-gradient-to-b from-[#B7D2F0] to-[#718FB8] rounded-full mx-auto shadow-md" />
+                <div className="w-3.5 h-5 bg-[#DCE7F5] rounded-sm mx-auto shadow" />
+              </div>
 
-              {/* Vinyl Disc Body */}
+              {/* Physical Vinyl Disc */}
               <div
-                className={`relative w-full h-full rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-4 border-[#12192e] flex items-center justify-center ${
+                onClick={handleTogglePlay}
+                className={`relative w-full h-full rounded-full cursor-pointer shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-4 border-[#12192e] flex items-center justify-center transition-transform ${
                   isPlaying ? 'animate-vinyl-spin' : 'animate-vinyl-spin-paused'
                 }`}
                 style={{
@@ -86,143 +146,74 @@ export function VinylPlayer() {
                   boxShadow: 'inset 0 0 40px rgba(0,0,0,0.9), 0 12px 40px rgba(0,0,0,0.8)',
                 }}
               >
-                {/* Vinyl Grooves */}
+                {/* Physical Circular Grooves */}
                 <div className="absolute inset-4 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-8 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-12 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-16 rounded-full border border-white/5 pointer-events-none" />
                 <div className="absolute inset-20 rounded-full border border-white/5 pointer-events-none" />
 
-                {/* Center Vinyl Label */}
-                <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-full overflow-hidden border-2 border-[#B7D2F0]/40 shadow-inner flex items-center justify-center">
+                {/* Center Vinyl Label with Actual Album Cover */}
+                <div className="relative w-28 h-28 sm:w-34 sm:h-34 rounded-full overflow-hidden border-2 border-[#B7D2F0]/40 shadow-inner flex items-center justify-center pointer-events-none">
                   <img
                     src={currentPlaylist.coverUrl}
                     alt={currentPlaylist.title}
                     className="w-full h-full object-cover filter contrast-[1.05]"
                   />
-                  {/* Center Spindle Hole */}
-                  <div className="absolute w-5 h-5 rounded-full bg-[#080D1C] border border-white/30 shadow-md" />
+                  {/* Record Spindle */}
+                  <div className="absolute w-4 h-4 rounded-full bg-[#080D1C] border border-white/40 shadow-md" />
                 </div>
-              </div>
-
-              {/* Tonearm Stylus Indicator */}
-              <div
-                className={`hidden sm:block absolute -top-4 right-4 w-28 h-32 pointer-events-none transition-transform duration-700 origin-top-right ${
-                  isPlaying ? 'rotate-12' : '-rotate-12'
-                }`}
-              >
-                <div className="w-1.5 h-24 bg-gradient-to-b from-[#B7D2F0] to-[#718FB8] rounded-full mx-auto shadow-lg" />
-                <div className="w-4 h-6 bg-[#DCE7F5] rounded-sm mx-auto shadow" />
               </div>
             </div>
 
-            {/* Quick Turntable Controls */}
-            <div className="flex items-center gap-4 mt-6">
+            {/* Turntable Control Bar */}
+            <div className="flex items-center gap-3 mt-6">
               <button
-                onClick={toggleSpin}
+                onClick={handleTogglePlay}
                 className="liquid-glass-button inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[#F4F5FA] text-xs font-mono-code cursor-pointer active:scale-95"
               >
                 {isPlaying ? (
                   <>
                     <Pause className="w-4 h-4 text-[#B7D2F0]" />
-                    <span>Pause Turntable</span>
+                    <span>Pause Vinyl</span>
                   </>
                 ) : (
                   <>
                     <Play className="w-4 h-4 text-[#B7D2F0] fill-[#B7D2F0]" />
-                    <span>Spin Record</span>
+                    <span>Spin Vinyl</span>
                   </>
                 )}
               </button>
 
-              <button
-                onClick={() => setShowEmbed(prev => !prev)}
-                className="liquid-glass-card px-4 py-2.5 rounded-full text-xs font-mono-code text-[#B7D2F0] hover:text-white transition-all cursor-pointer active:scale-95"
-              >
-                {showEmbed ? 'Hide Player' : 'Show Spotify Player'}
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Playlist Information */}
-          <div className="lg:col-span-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-mono-code text-[#718FB8] mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#B7D2F0]" />
-                <span>CURATED BY {currentPlaylist.curator.toUpperCase()}</span>
-              </div>
-
-              <h3 className="font-display italic text-3xl sm:text-4xl text-[#F4F5FA] mb-2">
-                {currentPlaylist.title}
-              </h3>
-
-              <p className="font-editorial italic text-lg text-[#B7D2F0] mb-4">
-                &ldquo;{currentPlaylist.subtitle}&rdquo;
-              </p>
-
-              <p className="font-editorial text-base sm:text-lg text-[#DCE7F5]/85 leading-relaxed font-light mb-6">
-                {currentPlaylist.description}
-              </p>
-
-              <div className="p-4 rounded-xl liquid-glass-card border border-[#B7D2F0]/15 space-y-2 mb-6 text-xs text-[#DCE7F5]/80 font-mono-code">
-                <div className="flex justify-between">
-                  <span className="text-[#718FB8]">Curator</span>
-                  <span>{currentPlaylist.curator}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#718FB8]">Format</span>
-                  <span>Spotify Curated Archive</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#718FB8]">Vibe</span>
-                  <span>Late Night Melodies &amp; Soft Clouds</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
               <a
                 href={currentPlaylist.externalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-sans font-medium text-xs tracking-wide transition-all shadow-lg hover:scale-105 active:scale-95 cursor-pointer"
+                className="liquid-glass-card inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-mono-code text-[#B7D2F0] hover:text-white transition-all cursor-pointer active:scale-95"
               >
-                <span>Listen on Spotify</span>
+                <span>Spotify</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
-
-              <span className="text-[11px] text-[#718FB8] font-mono-code">
-                Authentic Spotify Playlists
-              </span>
             </div>
           </div>
-        </div>
 
-        {/* Live Spotify Embed Container (Expandable) */}
-        {showEmbed && (
-          <div className="mt-8 pt-8 border-t border-[#B7D2F0]/15">
-            <div className="flex items-center justify-between mb-3 text-xs font-mono-code text-[#718FB8]">
-              <span>SPOTIFY EMBEDDED PLAYER · {currentPlaylist.curator}</span>
-              <button
-                onClick={() => setShowEmbed(false)}
-                className="text-[#B7D2F0] hover:underline cursor-pointer"
-              >
-                Close player
-              </button>
-            </div>
-            <div className="rounded-2xl overflow-hidden liquid-glass-panel shadow-2xl">
+          {/* Right: Actual Spotify Embedded Player with Music Playback */}
+          <div className="lg:col-span-7 flex flex-col justify-center">
+            <div className="rounded-2xl overflow-hidden liquid-glass-card shadow-2xl border border-[#B7D2F0]/20">
               <iframe
-                title={`Spotify Player - ${currentPlaylist.title}`}
+                ref={iframeRef}
+                key={currentPlaylist.id}
+                title={`Spotify Player - ${currentPlaylist.name}`}
                 src={currentPlaylist.embedUrl}
                 width="100%"
                 height="352"
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                 loading="lazy"
-                className="border-0 rounded-2xl"
+                className="border-0 rounded-2xl block"
               />
             </div>
           </div>
-        )}
+        </div>
       </div>
     </section>
   );

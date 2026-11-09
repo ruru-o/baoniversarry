@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  Sparkles,
-  Heart,
-  Image as ImageIcon,
-  Compass,
-  Music,
-  BookOpen,
-  Infinity as InfinityIcon,
-} from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Music, Heart } from 'lucide-react';
 
 interface NavigationProps {
   activeSection: string;
@@ -28,12 +20,9 @@ export function Navigation({ activeSection }: NavigationProps) {
 
   const navItems = [
     { id: 'intro', label: 'Intro', icon: Sparkles },
+    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+    { id: 'soundtrack', label: 'Music', icon: Music },
     { id: 'letter', label: 'Letter', icon: Heart },
-    { id: 'gallery', label: 'Memories', icon: ImageIcon },
-    { id: 'pets', label: 'Constellations', icon: Compass },
-    { id: 'soundtrack', label: 'Soundtrack', icon: Music },
-    { id: 'journal', label: 'Journal', icon: BookOpen },
-    { id: 'future', label: 'Forever', icon: InfinityIcon },
   ];
 
   const scrollTo = (id: string) => {
@@ -74,7 +63,7 @@ export function Navigation({ activeSection }: NavigationProps) {
                 key={item.id}
                 onClick={() => scrollTo(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`group relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs transition-all duration-300 cursor-pointer active:scale-95 ${
+                className={`group relative flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full text-xs transition-all duration-300 cursor-pointer active:scale-95 ${
                   isActive
                     ? 'liquid-pill-active text-[#F4F5FA] font-medium'
                     : 'text-[#DCE7F5]/70 hover:text-[#F4F5FA] hover:bg-white/[0.06]'
@@ -85,14 +74,9 @@ export function Navigation({ activeSection }: NavigationProps) {
                     isActive ? 'text-[#B7D2F0]' : 'text-[#718FB8]'
                   }`}
                 />
-                <span className="hidden md:inline font-mono-code text-[11px] tracking-tight">
+                <span className="font-mono-code text-[11px] tracking-tight">
                   {item.label}
                 </span>
-
-                {/* Subtle active indicator dot for mobile when text is hidden */}
-                {isActive && (
-                  <span className="md:hidden absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#B7D2F0]" />
-                )}
               </button>
             );
           })}
