@@ -1,20 +1,40 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { CosmicCanvas } from './components/Three/CosmicCanvas';
 import { Navigation } from './components/Navigation';
 import { AmbientPianoControl } from './components/AmbientPianoControl';
 import { HeroIntro } from './components/HeroIntro';
 import { ContinuousGallery } from './components/ContinuousGallery';
 import { VinylPlayer } from './components/VinylPlayer';
-import { AnniversaryLetter } from './components/AnniversaryLetter';
-import { AnniversaryEnding } from './components/AnniversaryEnding';
-import { ExpandedPhotoModal } from './components/ExpandedPhotoModal';
 import { ScrollStorySequence } from './components/ScrollStorySequence';
 import { ALL_PHOTOS, type PhotoItem } from './data/photos';
+
+const AnniversaryLetter = lazy(() =>
+  import('./components/AnniversaryLetter').then((m) => ({ default: m.AnniversaryLetter }))
+);
+
+const AnniversaryEnding = lazy(() =>
+  import('./components/AnniversaryEnding').then((m) => ({ default: m.AnniversaryEnding }))
+);
+
+const ExpandedPhotoModal = lazy(() =>
+  import('./components/ExpandedPhotoModal').then((m) => ({ default: m.ExpandedPhotoModal }))
+);
 
 export default function App() {
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
   const [activeSection, setActiveSection] = useState<string>('intro');
   const [isLetterOpen, setIsLetterOpen] = useState(false);
+
+  useEffect(() => {
+    const prefetchBelowFold = () => {
+      void import('./components/AnniversaryLetter');
+      void import('./components/ExpandedPhotoModal');
+    };
+
+    const timer = window.setTimeout(prefetchBelowFold, 600);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const sections = ['intro', 'gallery', 'soundtrack', 'letter', 'future'];
@@ -85,10 +105,12 @@ export default function App() {
         />
 
         {/* 04: The Anniversary Letter (Archival Watercolor Portrait & Sincere Letter) */}
-        <AnniversaryLetter
-          isOpen={isLetterOpen}
-          onOpenChange={setIsLetterOpen}
-        />
+        <Suspense fallback={<section id="letter" className="min-h-screen" aria-hidden="true" />}>
+          <AnniversaryLetter
+            isOpen={isLetterOpen}
+            onOpenChange={setIsLetterOpen}
+          />
+        </Suspense>
 
         {isLetterOpen && (
           <>
@@ -105,18 +127,24 @@ export default function App() {
             />
 
             {/* 05: Quiet Celestial Closing */}
-            <AnniversaryEnding />
+            <Suspense fallback={<section id="future" className="min-h-[70vh]" aria-hidden="true" />}>
+              <AnniversaryEnding />
+            </Suspense>
           </>
         )}
       </main>
 
       {/* High-Resolution Fullscreen Photo Modal */}
-      <ExpandedPhotoModal
-        photo={selectedPhoto}
-        photos={ALL_PHOTOS}
-        onClose={() => setSelectedPhoto(null)}
-        onSelectPhoto={setSelectedPhoto}
-      />
+      {selectedPhoto && (
+        <Suspense fallback={null}>
+          <ExpandedPhotoModal
+            photo={selectedPhoto}
+            photos={ALL_PHOTOS}
+            onClose={() => setSelectedPhoto(null)}
+            onSelectPhoto={setSelectedPhoto}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

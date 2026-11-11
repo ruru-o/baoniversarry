@@ -92,6 +92,7 @@ export function ExpandedPhotoModal({
           <img
             src={photo.fullUrl}
             alt={photo.filename}
+            decoding="async"
             className="max-h-[75vh] max-w-full w-auto h-auto object-contain rounded-xl block select-none"
           />
         </div>

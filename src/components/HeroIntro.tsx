@@ -135,7 +135,7 @@ function HumanHandwrittenTitle() {
       style={{ maxWidth: 'min(940px, 94vw)' }}
     >
       {/* Line 1: Happy 2nd */}
-      <h1 className="text-[clamp(2.65rem,5.6vw,4.5rem)] font-medium leading-[1.12] text-[#EDF4FF] tracking-[0.015em] drop-shadow-[0_0_18px_rgba(187,210,239,0.5)]">
+      <h1 className="text-[clamp(2.65rem,5.6vw,4.5rem)] font-medium leading-[1.12] text-[#EDF4FF] tracking-[0.015em] [text-shadow:0_0_18px_rgba(187,210,239,0.5)]">
         {line1Letters.map((cfg, idx) => (
           <span
             key={`l1-${idx}`}
@@ -154,7 +154,7 @@ function HumanHandwrittenTitle() {
       </h1>
 
       {/* Line 2: Baoniversarry */}
-      <div className="text-[clamp(3.6rem,8.8vw,7rem)] font-semibold leading-[1.04] text-[#D7E6F8] tracking-[0.005em] mt-1 sm:mt-1.5 drop-shadow-[0_0_24px_rgba(187,210,239,0.65)]">
+      <div className="text-[clamp(3.6rem,8.8vw,7rem)] font-semibold leading-[1.04] text-[#D7E6F8] tracking-[0.005em] mt-1 sm:mt-1.5 [text-shadow:0_0_24px_rgba(187,210,239,0.65)]">
         {line2Letters.map((cfg, idx) => (
           <span
             key={`l2-${idx}`}

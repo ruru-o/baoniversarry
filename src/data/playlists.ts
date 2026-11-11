@@ -83,7 +83,7 @@ export const WAM_TRACKS: PlaylistTrack[] = [
     "duration": 150,
     "coverUrl": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e0276e2f00b72f7d66501a8419e",
     "previewUrl": "https://p.scdn.co/mp3-preview/b2ad2192221a53e6666d998f69b645b3c2ee965a",
-    "youtubeId": "d3SX5hyoRwc"
+    "youtubeId": "GMBSruqyXuI"
   },
   {
     "id": "0u7Shj9zotYlZR1HTV04CX",

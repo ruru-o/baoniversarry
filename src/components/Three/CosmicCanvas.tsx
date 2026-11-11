@@ -42,6 +42,7 @@ interface PuppetRefs {
   headEl: HTMLDivElement | null;
   leafEl: HTMLDivElement | null;
   rimEl: HTMLDivElement | null;
+  lastPathD: string;
   headSpring: SpringState;
   leafSpring: SpringState;
 }
@@ -52,6 +53,7 @@ function makeRigRefs(): PuppetRefs {
     headEl: null,
     leafEl: null,
     rimEl: null,
+    lastPathD: '',
     headSpring: { value: 0, velocity: 0 },
     leafSpring: { value: 0, velocity: 0 },
   };
@@ -275,6 +277,8 @@ const FORE_SPECS: PuppetRigSpec[] = [
   },
 ];
 
+const FORE_EMITTERS = FORE_SPECS.filter((s) => s.spawnFrac && s.partIndex !== undefined);
+
 function HeadPivotContent({
   part,
   displayScale,
@@ -295,6 +299,7 @@ function HeadPivotContent({
       alt=""
       aria-hidden="true"
       draggable={false}
+      decoding="async"
       width={w}
       height={h}
       style={{
@@ -324,6 +329,9 @@ function LeafChild({ spec }: { spec: PuppetRigSpec }) {
         alt=""
         aria-hidden="true"
         draggable={false}
+        decoding="async"
+        width={w}
+        height={h}
         style={{
           width: `${w}px`,
           height: `${h}px`,
@@ -349,6 +357,9 @@ function LeafChild({ spec }: { spec: PuppetRigSpec }) {
         alt=""
         aria-hidden="true"
         draggable={false}
+        decoding="async"
+        width={w}
+        height={h}
         style={{
           width: `${w}px`,
           height: `${h}px`,
@@ -474,7 +485,8 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           rig.leafSpring.value = i % 2 === 0 ? 12 : -18;
         }
 
-        if (rig.pathEl) {
+        if (rig.pathEl && rig.lastPathD !== solved.pathD) {
+          rig.lastPathD = solved.pathD;
           rig.pathEl.setAttribute('d', solved.pathD);
         }
 
@@ -553,9 +565,8 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
         applyPuppetState(FORE_SPECS, timeSec, dt);
 
         // Occasional natural petal detachment from wind-swept foreground flowers
-        if (timeSec >= nextDetachTime) {
-          const emitters = FORE_SPECS.filter((s) => s.spawnFrac && s.partIndex !== undefined);
-          const chosen = emitters[Math.floor((timeSec * 7.3) % emitters.length)];
+        if (timeSec >= nextDetachTime && FORE_EMITTERS.length > 0) {
+          const chosen = FORE_EMITTERS[Math.floor((timeSec * 7.3) % FORE_EMITTERS.length)];
 
           if (chosen?.spawnFrac && chosen.partIndex !== undefined) {
             const gustDir = sampleWindField(chosen.xNorm, chosen.yNorm, timeSec) >= 0 ? 1 : -1;
@@ -633,19 +644,17 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
       {/* LAYER 04A: Deep Horizon Afterglow Pools (Behind Midground Flora) */}
       <div className="fixed inset-0 z-[12] pointer-events-none mix-blend-screen">
         <div
-          className="absolute -left-16 bottom-6 w-[44vw] h-[48vh] rounded-full opacity-55"
+          className="absolute -left-20 bottom-2 w-[48vw] h-[52vh] rounded-full opacity-55"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(46, 118, 212, 0.28) 0%, rgba(28, 74, 148, 0.1) 52%, transparent 74%)',
-            filter: 'blur(38px)',
+              'radial-gradient(ellipse at center, rgba(46, 118, 212, 0.24) 0%, rgba(28, 74, 148, 0.1) 38%, rgba(28, 74, 148, 0.03) 62%, transparent 80%)',
           }}
         />
         <div
-          className="absolute -right-12 -bottom-10 w-[48vw] h-[52vh] rounded-full opacity-60"
+          className="absolute -right-16 -bottom-14 w-[52vw] h-[56vh] rounded-full opacity-60"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(64, 138, 232, 0.3) 0%, rgba(224, 182, 102, 0.08) 46%, transparent 74%)',
-            filter: 'blur(42px)',
+              'radial-gradient(ellipse at center, rgba(64, 138, 232, 0.26) 0%, rgba(224, 182, 102, 0.08) 34%, rgba(64, 138, 232, 0.03) 60%, transparent 80%)',
           }}
         />
       </div>
@@ -699,11 +708,11 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           ref={(el) => {
             pulseAuraRefs.current[0] = el;
           }}
-          className="absolute left-[0%] bottom-[6%] w-[380px] sm:w-[540px] h-[420px] rounded-full"
+          className="absolute left-[-2%] bottom-[4%] w-[410px] sm:w-[580px] h-[450px] rounded-full"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(164, 218, 255, 0.56) 0%, rgba(92, 174, 248, 0.28) 42%, rgba(255, 224, 150, 0.12) 66%, transparent 80%)',
-            filter: 'blur(36px)',
+              'radial-gradient(ellipse at center, rgba(164, 218, 255, 0.44) 0%, rgba(92, 174, 248, 0.22) 34%, rgba(255, 224, 150, 0.09) 56%, rgba(92, 174, 248, 0.025) 72%, transparent 86%)',
+            willChange: 'transform, opacity',
           }}
         />
 
@@ -712,11 +721,11 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           ref={(el) => {
             pulseAuraRefs.current[1] = el;
           }}
-          className="absolute right-[0%] bottom-[2%] w-[400px] sm:w-[560px] h-[440px] rounded-full"
+          className="absolute right-[-2%] bottom-[0%] w-[430px] sm:w-[600px] h-[470px] rounded-full"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(145, 212, 255, 0.54) 0%, rgba(252, 212, 128, 0.22) 38%, rgba(56, 134, 232, 0.22) 58%, transparent 80%)',
-            filter: 'blur(38px)',
+              'radial-gradient(ellipse at center, rgba(145, 212, 255, 0.42) 0%, rgba(252, 212, 128, 0.18) 32%, rgba(56, 134, 232, 0.16) 52%, rgba(56, 134, 232, 0.03) 72%, transparent 86%)',
+            willChange: 'transform, opacity',
           }}
         />
 
@@ -725,11 +734,11 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           ref={(el) => {
             pulseAuraRefs.current[2] = el;
           }}
-          className="absolute left-[-4%] top-[-2%] w-[340px] sm:w-[440px] h-[320px] rounded-full"
+          className="absolute left-[-6%] top-[-4%] w-[370px] sm:w-[475px] h-[350px] rounded-full"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(180, 228, 255, 0.46) 0%, rgba(96, 176, 245, 0.2) 50%, transparent 78%)',
-            filter: 'blur(34px)',
+              'radial-gradient(ellipse at center, rgba(180, 228, 255, 0.38) 0%, rgba(96, 176, 245, 0.16) 38%, rgba(96, 176, 245, 0.04) 64%, transparent 84%)',
+            willChange: 'transform, opacity',
           }}
         />
 
@@ -738,31 +747,31 @@ export function CosmicCanvas({ interactive = true }: { interactive?: boolean }) 
           ref={(el) => {
             pulseAuraRefs.current[3] = el;
           }}
-          className="absolute right-[-4%] top-[4%] w-[360px] sm:w-[460px] h-[360px] rounded-full"
+          className="absolute right-[-6%] top-[2%] w-[390px] sm:w-[495px] h-[390px] rounded-full"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(188, 230, 255, 0.46) 0%, rgba(114, 184, 248, 0.2) 52%, transparent 78%)',
-            filter: 'blur(36px)',
+              'radial-gradient(ellipse at center, rgba(188, 230, 255, 0.38) 0%, rgba(114, 184, 248, 0.16) 40%, rgba(114, 184, 248, 0.04) 65%, transparent 84%)',
+            willChange: 'transform, opacity',
           }}
         />
 
         {/* Diagonal volumetric celestial light shafts sweeping between floral planes */}
         <div
           ref={beam1Ref}
-          className="absolute -top-[18%] left-[8%] w-[38vw] min-w-[280px] h-[145vh]"
+          className="absolute -top-[18%] left-[7%] w-[40vw] min-w-[290px] h-[145vh]"
           style={{
             background:
-              'linear-gradient(90deg, transparent 0%, rgba(168, 216, 255, 0.08) 28%, rgba(218, 240, 255, 0.22) 50%, rgba(168, 216, 255, 0.07) 72%, transparent 100%)',
-            filter: 'blur(22px)',
+              'linear-gradient(90deg, transparent 0%, rgba(168, 216, 255, 0.03) 18%, rgba(168, 216, 255, 0.08) 32%, rgba(218, 240, 255, 0.19) 50%, rgba(168, 216, 255, 0.07) 68%, rgba(168, 216, 255, 0.02) 82%, transparent 100%)',
+            willChange: 'transform, opacity',
           }}
         />
         <div
           ref={beam2Ref}
-          className="absolute -top-[20%] right-[10%] w-[32vw] min-w-[240px] h-[140vh]"
+          className="absolute -top-[20%] right-[9%] w-[34vw] min-w-[250px] h-[140vh]"
           style={{
             background:
-              'linear-gradient(90deg, transparent 0%, rgba(148, 206, 255, 0.07) 26%, rgba(206, 236, 255, 0.19) 50%, rgba(252, 224, 156, 0.09) 68%, transparent 100%)',
-            filter: 'blur(24px)',
+              'linear-gradient(90deg, transparent 0%, rgba(148, 206, 255, 0.025) 16%, rgba(148, 206, 255, 0.07) 30%, rgba(206, 236, 255, 0.17) 50%, rgba(252, 224, 156, 0.08) 68%, rgba(148, 206, 255, 0.02) 84%, transparent 100%)',
+            willChange: 'transform, opacity',
           }}
         />
       </div>
@@ -942,13 +951,12 @@ function ForegroundCluster({
       <div
         ref={(el) => bindElementRef(spec.id, 'rimEl', el)}
         style={{
-          left: '-64px',
-          top: '-64px',
-          width: '128px',
-          height: '128px',
+          left: '-72px',
+          top: '-72px',
+          width: '144px',
+          height: '144px',
           background:
-            'radial-gradient(circle, rgba(190, 226, 255, 0.5) 0%, rgba(120, 188, 248, 0.2) 52%, transparent 76%)',
-          filter: 'blur(12px)',
+            'radial-gradient(circle, rgba(190, 226, 255, 0.44) 0%, rgba(120, 188, 248, 0.16) 44%, rgba(120, 188, 248, 0.03) 68%, transparent 86%)',
         }}
         className="absolute rounded-full mix-blend-screen pointer-events-none"
       />

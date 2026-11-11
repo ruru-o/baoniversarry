@@ -51,6 +51,8 @@ describe('Anniversary Experience Verification', () => {
     for (const side of SPOTIFY_PLAYLISTS) {
       for (const track of side.tracks) {
         expect(Boolean(track.previewUrl || track.localAudioUrl)).toBe(true);
+        expect(track.youtubeId).toMatch(/^[A-Za-z0-9_-]{11}$/);
+        expect(track.duration).toBeGreaterThan(60);
       }
     }
   });

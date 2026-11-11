@@ -106,6 +106,15 @@ function createWarmHallImpulse(ctx: AudioContext, durationSec = 2.8): AudioBuffe
   const sampleRate = ctx.sampleRate;
   const length = Math.floor(sampleRate * durationSec);
   const buffer = ctx.createBuffer(2, length, sampleRate);
+  const bloomSamples = Math.max(1, sampleRate * 0.045);
+
+  // Precompute 1024-entry decay LUT to avoid 268k+ synchronous Math.pow calls on startup
+  const lutSize = 1024;
+  const envLut = new Float32Array(lutSize + 1);
+
+  for (let k = 0; k <= lutSize; k += 1) {
+    envLut[k] = Math.pow(1 - k / lutSize, 2.65);
+  }
 
   for (let ch = 0; ch < 2; ch += 1) {
     const channel = buffer.getChannelData(ch);
@@ -113,8 +122,11 @@ function createWarmHallImpulse(ctx: AudioContext, durationSec = 2.8): AudioBuffe
 
     for (let i = 0; i < length; i += 1) {
       const progress = i / length;
-      const envelope = Math.pow(1 - progress, 2.65);
-      const earlyBloom = Math.min(1, i / (sampleRate * 0.045));
+      const lutPos = progress * lutSize;
+      const lutIdx = Math.min(lutSize - 1, lutPos | 0);
+      const frac = lutPos - lutIdx;
+      const envelope = envLut[lutIdx] + (envLut[lutIdx + 1] - envLut[lutIdx]) * frac;
+      const earlyBloom = i < bloomSamples ? i / bloomSamples : 1;
       const white = Math.random() * 2 - 1;
       // Progressive dark smoothing models felt & wooden hall reflections
       const cutoff = 0.24 - progress * 0.16;

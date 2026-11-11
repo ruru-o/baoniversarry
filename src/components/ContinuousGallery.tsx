@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { ALL_PHOTOS, type PhotoItem } from '../data/photos';
 
@@ -7,20 +7,20 @@ interface ContinuousGalleryProps {
 }
 
 // Realistic Liquid Glass Frame for Photographs with Optical Starlight Refraction
-function RealisticLiquidGlassPhotoCard({
+const RealisticLiquidGlassPhotoCard = memo(function RealisticLiquidGlassPhotoCard({
   photo,
-  onSelect,
+  onSelectPhoto,
   priority = false,
 }: {
   photo: PhotoItem;
-  onSelect: () => void;
+  onSelectPhoto: (photo: PhotoItem) => void;
   priority?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div
-      onClick={onSelect}
+      onClick={() => onSelectPhoto(photo)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className="group relative rounded-2xl overflow-hidden cursor-pointer select-none transition-all duration-500 liquid-glass-frame"
@@ -68,7 +68,7 @@ function RealisticLiquidGlassPhotoCard({
               transform: isHovered ? 'translateY(0)' : 'translateY(2px)',
             }}
           >
-            <p className="font-editorial italic text-base sm:text-lg text-[#EDF4FF] leading-snug drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
+            <p className="font-editorial italic text-base sm:text-lg text-[#EDF4FF] leading-snug [text-shadow:0_2px_10px_rgba(0,0,0,0.95)]">
               {photo.constellationPhrase}
             </p>
           </div>
@@ -76,7 +76,7 @@ function RealisticLiquidGlassPhotoCard({
       </div>
     </div>
   );
-}
+});
 
 export function ContinuousGallery({ onSelectPhoto }: ContinuousGalleryProps) {
   return (
@@ -90,7 +90,7 @@ export function ContinuousGallery({ onSelectPhoto }: ContinuousGalleryProps) {
           <div key={photo.id} className="break-inside-avoid">
             <RealisticLiquidGlassPhotoCard
               photo={photo}
-              onSelect={() => onSelectPhoto(photo)}
+              onSelectPhoto={onSelectPhoto}
               priority={idx < 4}
             />
           </div>

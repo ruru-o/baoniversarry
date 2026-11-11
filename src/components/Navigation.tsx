@@ -1,28 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Image as ImageIcon, Music, Heart } from 'lucide-react';
 
 interface NavigationProps {
   activeSection: string;
 }
 
+const NAV_ITEMS = [
+  { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+  { id: 'soundtrack', label: 'Music', icon: Music },
+  { id: 'letter', label: 'Letter', icon: Heart },
+] as const;
+
 export function Navigation({ activeSection }: NavigationProps) {
   const [scrolled, setScrolled] = useState(false);
+  const lastScrolledRef = useRef(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 40);
+      const next = window.scrollY > 40;
+
+      if (next !== lastScrolledRef.current) {
+        lastScrolledRef.current = next;
+        setScrolled(next);
+      }
     };
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const navItems = [
-    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
-    { id: 'soundtrack', label: 'Music', icon: Music },
-    { id: 'letter', label: 'Letter', icon: Heart },
-  ];
 
   const scrollTo = (id: string) => {
     if (id === 'soundtrack') {
@@ -45,7 +52,7 @@ export function Navigation({ activeSection }: NavigationProps) {
         }`}
       >
         {/* Navigation Items */}
-        {navItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
 

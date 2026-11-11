@@ -3,7 +3,6 @@ import {
   useRef,
   useEffect,
   useCallback,
-  useMemo,
   type PointerEvent,
   type ReactNode,
 } from 'react';
@@ -41,61 +40,61 @@ const EMPTY_LIQUID_MAPS: LiquidGlassMaps = {
   interiorMaskUri: '',
 };
 
+const LIQUID_GLASS_CACHE = new Map<string, LiquidGlassMaps>();
+const LIQUID_GLASS_INFLIGHT = new Map<string, Promise<LiquidGlassMaps>>();
+
 function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)));
 }
 
-interface RoundedRectSdfSample {
-  depth: number;
-  nx: number;
-  ny: number;
-}
+function canvasToLosslessUriAsync(canvas: HTMLCanvasElement): Promise<string> {
+  const createBlob = canvas.toBlob;
+  const toObjectUrl = globalThis.URL?.createObjectURL;
 
-/** Computes rounded-rect signed distance inward depth and outward unit normal at pixel (x, y). */
-function computeRoundedRectSdf(
-  x: number,
-  y: number,
-  halfW: number,
-  halfH: number,
-  radius: number
-): RoundedRectSdfSample {
-  const dx = x + 0.5 - halfW;
-  const dy = y + 0.5 - halfH;
-  const px = Math.abs(dx) - (halfW - radius);
-  const py = Math.abs(dy) - (halfH - radius);
-  const qx = Math.max(px, 0);
-  const qy = Math.max(py, 0);
-  const outLen = Math.hypot(qx, qy);
-  const sd = outLen + Math.min(Math.max(px, py), 0) - radius;
-  const depth = Math.max(0, -sd);
-
-  if (outLen > 0.001) {
-    return {
-      depth,
-      nx: (qx / outLen) * Math.sign(dx),
-      ny: (qy / outLen) * Math.sign(dy),
-    };
+  if (!createBlob || !toObjectUrl) {
+    return Promise.resolve(canvas.toDataURL('image/png'));
   }
 
-  if (px > py) {
-    return { depth, nx: Math.sign(dx), ny: 0 };
-  }
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(toObjectUrl(blob));
 
-  return { depth, nx: 0, ny: Math.sign(dy) };
+        return;
+      }
+
+      resolve(canvas.toDataURL('image/png'));
+    }, 'image/png');
+  });
 }
 
-/** Builds aspect-matched PNG bevel displacement + feathered interior frost mask from exact rounded-rect SDF. */
-function buildLiquidGlassMaps(cssWidth: number, cssHeight: number): LiquidGlassMaps {
+/** Builds quantized, cached PNG bevel displacement + feathered interior frost mask using off-thread PNG encoding. */
+function buildLiquidGlassMapsAsync(cssWidth: number, cssHeight: number): Promise<LiquidGlassMaps> {
   const doc = globalThis.document;
 
   if (!doc || cssWidth <= 0 || cssHeight <= 0) {
-    return EMPTY_LIQUID_MAPS;
+    return Promise.resolve(EMPTY_LIQUID_MAPS);
   }
 
-  // Half-res buffer capped cleanly for fast (<2ms) native PNG encoding while matching panel aspect ratio.
-  const scale = Math.min(0.5, 560 / Math.max(cssWidth, cssHeight));
-  const w = Math.max(64, Math.round(cssWidth * scale));
-  const h = Math.max(64, Math.round(cssHeight * scale));
+  const qW = Math.max(64, Math.round(cssWidth / 32) * 32);
+  const qH = Math.max(64, Math.round(cssHeight / 32) * 32);
+  const cacheKey = `${qW}x${qH}`;
+  const cached = LIQUID_GLASS_CACHE.get(cacheKey);
+
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  const inflight = LIQUID_GLASS_INFLIGHT.get(cacheKey);
+
+  if (inflight) {
+    return inflight;
+  }
+
+  // Bilinearly scaled perimeter lens map capped at 320px for sub-2ms pixel fill
+  const scale = Math.min(0.32, 320 / Math.max(qW, qH));
+  const w = Math.max(48, Math.round(qW * scale));
+  const h = Math.max(48, Math.round(qH * scale));
   const dispCanvas = doc.createElement('canvas');
   const maskCanvas = doc.createElement('canvas');
 
@@ -108,58 +107,117 @@ function buildLiquidGlassMaps(cssWidth: number, cssHeight: number): LiquidGlassM
   const maskCtx = maskCanvas.getContext('2d');
 
   if (!dispCtx || !maskCtx) {
-    return EMPTY_LIQUID_MAPS;
+    return Promise.resolve(EMPTY_LIQUID_MAPS);
   }
 
-  const dispData = dispCtx.createImageData(w, h);
-  const maskData = maskCtx.createImageData(w, h);
+  const dispImg = dispCtx.createImageData(w, h);
+  const maskImg = maskCtx.createImageData(w, h);
+  const dispData = dispImg.data;
+  const maskData = maskImg.data;
   const halfW = w / 2;
   const halfH = h / 2;
   const radius = Math.min(24 * scale, halfW, halfH);
   const rimWidth = 35 * scale;
   const clearRim = 4 * scale;
+  const rimSpan = Math.max(1, rimWidth - clearRim);
+  const innerHalfW = Math.max(0, halfW - Math.max(radius, rimWidth) - 1);
+  const innerHalfH = Math.max(0, halfH - Math.max(radius, rimWidth) - 1);
+  const rx = halfW - radius;
+  const ry = halfH - radius;
 
   for (let y = 0; y < h; y += 1) {
+    const dy = y + 0.5 - halfH;
+    const absDy = Math.abs(dy);
+    const inInnerY = absDy <= innerHalfH;
+    const py = absDy - ry;
+    const qy = py > 0 ? py : 0;
+    const rowOffset = y * w;
+
     for (let x = 0; x < w; x += 1) {
-      const { depth, nx, ny } = computeRoundedRectSdf(x, y, halfW, halfH, radius);
-      const i = (y * w + x) * 4;
+      const dx = x + 0.5 - halfW;
+      const absDx = Math.abs(dx);
+      const i = (rowOffset + x) * 4;
+
+      if (inInnerY && absDx <= innerHalfW) {
+        dispData[i] = 128;
+        dispData[i + 1] = 128;
+        dispData[i + 2] = 128;
+        dispData[i + 3] = 255;
+        maskData[i] = 255;
+        maskData[i + 1] = 255;
+        maskData[i + 2] = 255;
+        maskData[i + 3] = 255;
+        continue;
+      }
+
+      const px = absDx - rx;
+      const qx = px > 0 ? px : 0;
+      const outLen = qx > 0 && qy > 0 ? Math.hypot(qx, qy) : qx + qy;
+      const innerMin = px > py ? px : py;
+      const sd = outLen + (innerMin < 0 ? innerMin : 0) - radius;
+      const depth = sd < 0 ? -sd : 0;
+
+      let nx = 0;
+      let ny = 0;
+
+      if (outLen > 0.001) {
+        const sdx = dx < 0 ? -1 : 1;
+        const sdy = dy < 0 ? -1 : 1;
+        nx = (qx / outLen) * sdx;
+        ny = (qy / outLen) * sdy;
+      } else if (px > py) {
+        nx = dx < 0 ? -1 : 1;
+      } else {
+        ny = dy < 0 ? -1 : 1;
+      }
 
       if (depth < rimWidth) {
         const mag = Math.pow(1 - depth / rimWidth, 1.85);
-
-        dispData.data[i] = clampByte(128 - nx * 122 * mag);
-        dispData.data[i + 1] = clampByte(128 - ny * 122 * mag);
+        dispData[i] = clampByte(128 - nx * 122 * mag);
+        dispData[i + 1] = clampByte(128 - ny * 122 * mag);
       } else {
-        dispData.data[i] = 128;
-        dispData.data[i + 1] = 128;
+        dispData[i] = 128;
+        dispData[i + 1] = 128;
       }
 
-      dispData.data[i + 2] = 128;
-      dispData.data[i + 3] = 255;
+      dispData[i + 2] = 128;
+      dispData[i + 3] = 255;
 
-      const t = Math.max(0, Math.min(1, (depth - clearRim) / Math.max(1, rimWidth - clearRim)));
-
-      maskData.data[i] = 255;
-      maskData.data[i + 1] = 255;
-      maskData.data[i + 2] = 255;
-      maskData.data[i + 3] = Math.round(255 * (0.5 - 0.5 * Math.cos(Math.PI * t)));
+      const t = Math.max(0, Math.min(1, (depth - clearRim) / rimSpan));
+      maskData[i] = 255;
+      maskData[i + 1] = 255;
+      maskData[i + 2] = 255;
+      maskData[i + 3] = Math.round(255 * (0.5 - 0.5 * Math.cos(Math.PI * t)));
     }
   }
 
-  dispCtx.putImageData(dispData, 0, 0);
-  maskCtx.putImageData(maskData, 0, 0);
+  dispCtx.putImageData(dispImg, 0, 0);
+  maskCtx.putImageData(maskImg, 0, 0);
 
-  return {
-    displacementUri: dispCanvas.toDataURL('image/png'),
-    interiorMaskUri: maskCanvas.toDataURL('image/png'),
-  };
+  const job = Promise.all([
+    canvasToLosslessUriAsync(dispCanvas),
+    canvasToLosslessUriAsync(maskCanvas),
+  ]).then(([displacementUri, interiorMaskUri]) => {
+    const built = { displacementUri, interiorMaskUri };
+    LIQUID_GLASS_CACHE.set(cacheKey, built);
+    LIQUID_GLASS_INFLIGHT.delete(cacheKey);
+
+    return built;
+  });
+
+  LIQUID_GLASS_INFLIGHT.set(cacheKey, job);
+
+  return job;
 }
 
 /** iOS Liquid Glass slab: pre-frost underlay + 2D rounded-rect SDF perimeter refraction + feathered creamy core. */
 function VinylGlassWindow({ children }: { children: ReactNode }) {
   const winRef = useRef<HTMLDivElement>(null);
   const glintRef = useRef<HTMLDivElement>(null);
-  const [boxSize, setBoxSize] = useState({ w: 1104, h: 558 });
+  const [boxSize, setBoxSize] = useState<{ w: number; h: number } | null>(null);
+  const [isNearViewport, setIsNearViewport] = useState(false);
+
+  const [maps, setMaps] = useState<LiquidGlassMaps>(EMPTY_LIQUID_MAPS);
 
   useEffect(() => {
     const el = winRef.current;
@@ -177,7 +235,7 @@ function VinylGlassWindow({ children }: { children: ReactNode }) {
       }
 
       setBoxSize((prev) =>
-        Math.abs(prev.w - nextW) >= 24 || Math.abs(prev.h - nextH) >= 24
+        !prev || Math.abs(prev.w - nextW) >= 32 || Math.abs(prev.h - nextH) >= 32
           ? { w: nextW, h: nextH }
           : prev
       );
@@ -206,7 +264,78 @@ function VinylGlassWindow({ children }: { children: ReactNode }) {
     return () => observer.disconnect();
   }, []);
 
-  const maps = useMemo(() => buildLiquidGlassMaps(boxSize.w, boxSize.h), [boxSize.w, boxSize.h]);
+  // Prepare liquid lens maps only once near viewport or after initial hero animations settle
+  useEffect(() => {
+    const el = winRef.current;
+
+    if (!el || isNearViewport) {
+      return undefined;
+    }
+
+    const InterObs = globalThis.IntersectionObserver;
+    let observer: IntersectionObserver | null = null;
+
+    if (InterObs) {
+      observer = new InterObs(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            setIsNearViewport(true);
+            observer?.disconnect();
+          }
+        },
+        { rootMargin: '900px 0px' }
+      );
+      observer.observe(el);
+    }
+
+    const scheduleIdle = window.requestIdleCallback;
+    const cancelIdle = window.cancelIdleCallback;
+
+    let idleId = 0;
+    let timerId = 0;
+
+    if (scheduleIdle) {
+      idleId = scheduleIdle(() => setIsNearViewport(true), { timeout: 2200 });
+    } else {
+      timerId = window.setTimeout(() => setIsNearViewport(true), 1800);
+    }
+
+    return () => {
+      observer?.disconnect();
+
+      if (idleId && cancelIdle) {
+        cancelIdle(idleId);
+      }
+
+      if (timerId) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [isNearViewport]);
+
+  // Build bevel & frost maps asynchronously with off-thread PNG encoding so main thread never stalls
+  useEffect(() => {
+    if (!boxSize || !isNearViewport) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled) return;
+
+      void buildLiquidGlassMapsAsync(boxSize.w, boxSize.h).then((nextMaps) => {
+        if (!cancelled) {
+          setMaps(nextMaps);
+        }
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [boxSize, isNearViewport]);
 
   const handlePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
     const glint = glintRef.current;
@@ -355,6 +484,7 @@ interface YTNamespace {
     options: {
       height?: string | number;
       width?: string | number;
+      host?: string;
       videoId?: string;
       playerVars?: Record<string, number | string>;
       events?: {
@@ -443,6 +573,8 @@ const SCRUB_SECONDS_PER_REV = 8;
 const MOTOR_DEG_PER_SEC = 108;
 const DEFAULT_WAM_TRACK_ID = '41EnM4giX9PJYZIBUCPmiI';
 const DEFAULT_BAO_TRACK_TITLE = 'beside you';
+const YT_PRIMARY_HOST = 'https://www.youtube-nocookie.com';
+const YT_FALLBACK_HOST = 'https://www.youtube.com';
 
 function findDefaultTrackIndex(tracks: PlaylistTrack[], sideIdx: number): number {
   const matched =
@@ -530,11 +662,16 @@ export function VinylPlayer() {
   const ytPlayerRef = useRef<YTPlayerInstance | null>(null);
   const ytReadyRef = useRef<boolean>(false);
   const ytUnavailableRef = useRef<boolean>(false);
+  const ytHostRef = useRef<string>(YT_PRIMARY_HOST);
+  const ytHostTriedRef = useRef<Set<string>>(new Set());
+  const switchYtHostRef = useRef<(track: PlaylistTrack, host: string, resumeSec: number) => boolean>(() => false);
+  const ensureVinylLoopRef = useRef<() => void>(() => {});
   const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeEngineRef = useRef<'local' | 'youtube' | 'preview'>(DEFAULT_WAM_TRACK?.localAudioUrl ? 'local' : 'youtube');
 
   // Synchronized state refs for animation/event callbacks
   const isPlayingRef = useRef<boolean>(false);
+  const audioUnlockNeededRef = useRef<boolean>(false);
   const currentTimeRef = useRef<number>(0);
   const trackDurationRef = useRef<number>(DEFAULT_WAM_TRACK?.duration ?? 168);
   const queueScrollRef = useRef<HTMLDivElement | null>(null);
@@ -547,6 +684,7 @@ export function VinylPlayer() {
   const isShuffleRef = useRef<boolean>(false);
 
   isPlayingRef.current = isPlaying;
+  audioUnlockNeededRef.current = audioUnlockNeeded;
   trackDurationRef.current = trackDuration;
   currentTrackRef.current = currentTrack;
   volumeRef.current = volume;
@@ -753,20 +891,39 @@ export function VinylPlayer() {
 
   switchToPreviewFallbackRef.current = switchToPreviewFallback;
 
-  // Verify YouTube playback started & advances past 0:00; fall back automatically if blocked or stalled
+  // Verify YouTube playback started & advances past 0:00; retry patiently across slow cold starts & try alternate host before fallback
   const scheduleYouTubePlaybackCheck = useCallback(() => {
     if (ytVerifyTimerRef.current) {
       window.clearTimeout(ytVerifyTimerRef.current);
       ytVerifyTimerRef.current = 0;
     }
 
-    const inspectPlayback = (allowSecondBufferingWait: boolean) => {
-      if (!isPlayingRef.current || activeEngineRef.current !== 'youtube') return;
+    const expectedTrackId = currentTrackRef.current.id;
+    const expectedYtId = currentTrackRef.current.youtubeId;
+    const retryDelays = [1600, 1600, 1800];
+
+    const inspectPlayback = (attempt: number) => {
+      if (
+        !isPlayingRef.current ||
+        activeEngineRef.current !== 'youtube' ||
+        currentTrackRef.current.id !== expectedTrackId
+      ) {
+        return;
+      }
 
       const activeTrack = currentTrackRef.current;
       const yt = ytPlayerRef.current;
 
-      if (!ytReadyRef.current || ytUnavailableRef.current || !yt) {
+      if (!ytReadyRef.current || !yt) {
+        if (!ytUnavailableRef.current && attempt < retryDelays.length) {
+          ytVerifyTimerRef.current = window.setTimeout(
+            () => inspectPlayback(attempt + 1),
+            retryDelays[attempt]
+          );
+
+          return;
+        }
+
         if (activeTrack.youtubeId && ytUnavailableRef.current) {
           failedYtIdsRef.current.add(activeTrack.youtubeId);
         }
@@ -789,25 +946,43 @@ export function VinylPlayer() {
             setAudioUnlockNeeded(false);
           }
 
-          if (ytTime > 0.05 || !allowSecondBufferingWait) {
+          if (ytTime > 0.05 || attempt >= retryDelays.length) {
             return;
           }
 
-          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(false), 950);
+          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(attempt + 1), 1000);
 
           return;
         }
 
-        // 3 = BUFFERING -> give it one brief grace check, then fall back to direct MP3 if still stuck at 0:00
-        if (ytState === 3 && allowSecondBufferingWait) {
-          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(false), 1100);
+        // Unstarted (-1), buffering (3), or cued (5) -> nudge play and grant full cold-start window before failing
+        if ((ytState === -1 || ytState === 3 || ytState === 5) && attempt < retryDelays.length) {
+          if (ytState === -1 || ytState === 5) {
+            try {
+              yt.playVideo();
+            } catch {
+              // Ignore transient player lock
+            }
+          }
+
+          ytVerifyTimerRef.current = window.setTimeout(
+            () => inspectPlayback(attempt + 1),
+            retryDelays[attempt]
+          );
 
           return;
         }
 
-        // Unstarted (-1), paused/blocked (2), cued (5), or hung buffering at 0:00 -> switch to MP3 stream
-        if (activeTrack.youtubeId && allowSecondBufferingWait === false) {
-          failedYtIdsRef.current.add(activeTrack.youtubeId);
+        // Try alternate YouTube embed host once (e.g. nocookie <-> standard) before falling back to 23s preview
+        if (expectedYtId) {
+          const altHost = ytHostRef.current === YT_PRIMARY_HOST ? YT_FALLBACK_HOST : YT_PRIMARY_HOST;
+          const altKey = `${activeTrack.id}:${altHost}`;
+
+          if (!ytHostTriedRef.current.has(altKey) && switchYtHostRef.current(activeTrack, altHost, currentTimeRef.current)) {
+            return;
+          }
+
+          failedYtIdsRef.current.add(expectedYtId);
         }
 
         if (activeTrack.previewUrl || activeTrack.localAudioUrl) {
@@ -828,7 +1003,7 @@ export function VinylPlayer() {
       }
     };
 
-    ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(true), 900);
+    ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(0), retryDelays[0]);
   }, [switchToPreviewFallback]);
 
   scheduleYtCheckRef.current = scheduleYouTubePlaybackCheck;
@@ -907,7 +1082,18 @@ export function VinylPlayer() {
       return;
     }
 
-    // Fallback: Spotify audio preview URL (immediate whenever YouTube is blocked, unavailable, or failed)
+    // Keep waiting on YouTube while its API initializes so rapid track picks still get full songs
+    if (track.youtubeId && !failedYtIdsRef.current.has(track.youtubeId) && !ytUnavailableRef.current) {
+      activeEngineRef.current = 'youtube';
+
+      if (shouldPlay) {
+        scheduleYouTubePlaybackCheck();
+      }
+
+      return;
+    }
+
+    // Fallback: Spotify audio preview URL (whenever YouTube is blocked, unavailable, or failed on both hosts)
     switchToPreviewFallback(track, shouldPlay, false);
   }, [canUseYouTube, scheduleYouTubePlaybackCheck, switchToPreviewFallback]);
 
@@ -1142,13 +1328,39 @@ export function VinylPlayer() {
       }
     };
 
-    const initYtPlayer = () => {
-      if (isDisposed || !ytContainerRef.current || !window.YT?.Player || ytPlayerRef.current) return;
+    const spawnYtPlayer = (hostUrl: string, initialVideoId: string, initialResumeSec: number) => {
+      const container = ytContainerRef.current;
 
-      ytPlayerRef.current = new window.YT.Player(ytContainerRef.current, {
+      if (isDisposed || !container || !window.YT?.Player) return false;
+
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch {
+          // Ignored
+        }
+
+        ytPlayerRef.current = null;
+        ytReadyRef.current = false;
+      }
+
+      container.replaceChildren();
+      const mountEl = document.createElement('div');
+      container.appendChild(mountEl);
+
+      ytHostRef.current = hostUrl;
+
+      const trackForAttempt = currentTrackRef.current;
+
+      if (trackForAttempt) {
+        ytHostTriedRef.current.add(`${trackForAttempt.id}:${hostUrl}`);
+      }
+
+      ytPlayerRef.current = new window.YT.Player(mountEl, {
         height: '200',
         width: '200',
-        videoId: currentTrackRef.current.youtubeId || 'BLYMjHAa0sE',
+        host: hostUrl,
+        videoId: initialVideoId || 'BLYMjHAa0sE',
         playerVars: {
           autoplay: 0,
           controls: 0,
@@ -1161,6 +1373,8 @@ export function VinylPlayer() {
         },
         events: {
           onReady: (ev) => {
+            if (isDisposed) return;
+
             if (ytBootTimer) {
               window.clearTimeout(ytBootTimer);
               ytBootTimer = 0;
@@ -1170,14 +1384,21 @@ export function VinylPlayer() {
             ytUnavailableRef.current = false;
             ev.target.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
 
-            if (isPlayingRef.current && activeEngineRef.current === 'youtube') {
-              const ytId = currentTrackRef.current.youtubeId;
+            const activeTrack = currentTrackRef.current;
 
-              if (ytId && failedYtIdsRef.current.has(ytId)) {
-                switchToPreviewFallbackRef.current(currentTrackRef.current, true, hasUserGestureRef.current);
-
-                return;
+            if (
+              isPlayingRef.current &&
+              !activeTrack.localAudioUrl &&
+              activeTrack.youtubeId &&
+              !failedYtIdsRef.current.has(activeTrack.youtubeId) &&
+              (activeEngineRef.current === 'youtube' || activeEngineRef.current === 'preview')
+            ) {
+              // Seamlessly upgrade temporary slow-boot preview back into full-song YouTube stream
+              if (activeEngineRef.current === 'preview' && htmlAudioRef.current) {
+                htmlAudioRef.current.pause();
               }
+
+              activeEngineRef.current = 'youtube';
 
               if (hasUserGestureRef.current && !isMutedRef.current) {
                 ev.target.unMute();
@@ -1191,8 +1412,10 @@ export function VinylPlayer() {
                 }
               }
 
-              if (currentTimeRef.current > 0) {
-                ev.target.loadVideoById(currentTrackRef.current.youtubeId, currentTimeRef.current);
+              const startAt = currentTimeRef.current > 0.25 ? currentTimeRef.current : initialResumeSec;
+
+              if (activeTrack.youtubeId !== initialVideoId || startAt > 0.25) {
+                ev.target.loadVideoById(activeTrack.youtubeId, startAt);
               }
 
               ev.target.playVideo();
@@ -1210,20 +1433,43 @@ export function VinylPlayer() {
             }
           },
           onError: () => {
-            // Seamless automatic fallback to Spotify MP3 preview if YT video fails
             const fallbackTrack = currentTrackRef.current;
 
-            if (fallbackTrack.youtubeId) {
-              failedYtIdsRef.current.add(fallbackTrack.youtubeId);
-            }
+            if (activeEngineRef.current === 'youtube' && fallbackTrack.youtubeId) {
+              const altHost = ytHostRef.current === YT_PRIMARY_HOST ? YT_FALLBACK_HOST : YT_PRIMARY_HOST;
+              const altKey = `${fallbackTrack.id}:${altHost}`;
 
-            if (activeEngineRef.current === 'youtube') {
+              if (!ytHostTriedRef.current.has(altKey) && switchYtHostRef.current(fallbackTrack, altHost, currentTimeRef.current)) {
+                return;
+              }
+
+              failedYtIdsRef.current.add(fallbackTrack.youtubeId);
               cancelVolumeRamp();
               switchToPreviewFallbackRef.current(fallbackTrack, isPlayingRef.current, false);
             }
           },
         },
       });
+
+      return true;
+    };
+
+    switchYtHostRef.current = (track: PlaylistTrack, nextHost: string, resumeSec: number) => {
+      if (isDisposed || !track.youtubeId) return false;
+
+      const spawned = spawnYtPlayer(nextHost, track.youtubeId, resumeSec);
+
+      if (spawned && isPlayingRef.current) {
+        scheduleYtCheckRef.current();
+      }
+
+      return spawned;
+    };
+
+    const initYtPlayer = () => {
+      if (ytPlayerRef.current) return;
+
+      spawnYtPlayer(YT_PRIMARY_HOST, currentTrackRef.current.youtubeId || 'BLYMjHAa0sE', 0);
     };
 
     let scriptElForCleanup: HTMLElement | null = null;
@@ -1236,7 +1482,7 @@ export function VinylPlayer() {
         if (!ytReadyRef.current) {
           markYtUnavailable();
         }
-      }, 2200);
+      }, 5500);
 
       let ytScriptEl = document.getElementById('yt-iframe-api-script');
 
@@ -1296,7 +1542,7 @@ export function VinylPlayer() {
     };
   }, [cancelVolumeRamp, startDramaticVolumeSwell]);
 
-  // Unified 60/120fps physics loop for vinyl rotation, inertia, and playback progress
+  // Unified 60/120fps physics loop for vinyl rotation, inertia, and playback progress (pauses when idle)
   useEffect(() => {
     let rafId = 0;
     let lastNow = performance.now();
@@ -1317,7 +1563,7 @@ export function VinylPlayer() {
         }
       }
 
-      if (vinylDiscRef.current) {
+      if (vinylDiscRef.current && (isPlayingRef.current || isDraggingRef.current || Math.abs(angularVelRef.current) > 0.05)) {
         vinylDiscRef.current.style.transform = `rotate(${discAngleRef.current.toFixed(2)}deg)`;
       }
 
@@ -1330,12 +1576,12 @@ export function VinylPlayer() {
             const t = ytPlayerRef.current.getCurrentTime();
             const d = ytPlayerRef.current.getDuration();
 
-            if (Number.isFinite(t) && t >= 0) {
+            if (Number.isFinite(t) && t >= 0 && Math.abs(t - currentTimeRef.current) >= 0.08) {
               currentTimeRef.current = t;
               setCurrentTime(t);
             }
 
-            if (Number.isFinite(d) && d > 1) {
+            if (Number.isFinite(d) && d > 1 && Math.abs(d - trackDurationRef.current) >= 0.5) {
               trackDurationRef.current = d;
               setTrackDuration(d);
             }
@@ -1345,27 +1591,52 @@ export function VinylPlayer() {
         } else if (htmlAudioRef.current) {
           const t = htmlAudioRef.current.currentTime;
 
-          if (Number.isFinite(t)) {
+          if (Number.isFinite(t) && Math.abs(t - currentTimeRef.current) >= 0.08) {
             currentTimeRef.current = t;
             setCurrentTime(t);
           }
 
           const d = htmlAudioRef.current.duration;
 
-          if (Number.isFinite(d) && d > 1) {
+          if (Number.isFinite(d) && d > 1 && Math.abs(d - trackDurationRef.current) >= 0.5) {
             trackDurationRef.current = d;
             setTrackDuration(d);
           }
         }
       }
 
-      rafId = requestAnimationFrame(tick);
+      if (isPlayingRef.current || isDraggingRef.current || Math.abs(angularVelRef.current) > 0.05) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = 0;
+      }
     };
 
-    rafId = requestAnimationFrame(tick);
+    const ensureRunning = () => {
+      if (rafId === 0) {
+        lastNow = performance.now();
+        rafId = requestAnimationFrame(tick);
+      }
+    };
 
-    return () => cancelAnimationFrame(rafId);
+    ensureVinylLoopRef.current = ensureRunning;
+
+    if (isPlayingRef.current || isDraggingRef.current || Math.abs(angularVelRef.current) > 0.05) {
+      ensureRunning();
+    }
+
+    return () => {
+      if (rafId !== 0) {
+        cancelAnimationFrame(rafId);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (isPlaying || isDraggingDisc) {
+      ensureVinylLoopRef.current();
+    }
+  }, [isPlaying, isDraggingDisc]);
 
   // Unmute already-playing stream or start active track cleanly inside a user gesture
   const unmuteOrStartCurrentTrack = useCallback(() => {
@@ -1431,9 +1702,15 @@ export function VinylPlayer() {
     loadAndPlayTrack(currentTrackRef.current, true);
   }, [cancelVolumeRamp, canUseYouTube, loadAndPlayTrack, primeAudioOnGesture, scheduleYouTubePlaybackCheck]);
 
-  // Play / Pause toggle
+  // Play / Pause toggle (when autoplay arrived muted/locked, clicking Play/Pause or Disc unlocks sound instead of silencing)
   const handleTogglePlay = useCallback(() => {
     if (performance.now() - justUnlockedAtRef.current < 450) {
+      return;
+    }
+
+    if (isPlayingRef.current && audioUnlockNeededRef.current && !isMutedRef.current) {
+      unmuteOrStartCurrentTrack();
+
       return;
     }
 
@@ -1519,9 +1796,28 @@ export function VinylPlayer() {
       return;
     }
 
+    if (
+      currentTrackRef.current.youtubeId &&
+      !failedYtIdsRef.current.has(currentTrackRef.current.youtubeId) &&
+      !ytUnavailableRef.current
+    ) {
+      primeAudioOnGesture();
+      activeEngineRef.current = 'youtube';
+      scheduleYouTubePlaybackCheck();
+
+      return;
+    }
+
     htmlPrimedRef.current = true;
     switchToPreviewFallback(currentTrackRef.current, true, false);
-  }, [cancelVolumeRamp, canUseYouTube, primeAudioOnGesture, scheduleYouTubePlaybackCheck, switchToPreviewFallback]);
+  }, [
+    cancelVolumeRamp,
+    canUseYouTube,
+    primeAudioOnGesture,
+    scheduleYouTubePlaybackCheck,
+    switchToPreviewFallback,
+    unmuteOrStartCurrentTrack,
+  ]);
 
   // Resume blocked scroll autoplay instantaneously on next user interaction anywhere
   useEffect(() => {
@@ -1946,6 +2242,7 @@ export function VinylPlayer() {
                     <img
                       src={currentTrack.coverUrl || currentSide.coverUrl}
                       alt={`${currentTrack.title} album art`}
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
 
@@ -2034,6 +2331,9 @@ export function VinylPlayer() {
                   <img
                     src={currentTrack.coverUrl || currentSide.coverUrl}
                     alt={currentTrack.title}
+                    width={80}
+                    height={80}
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -2154,7 +2454,10 @@ export function VinylPlayer() {
                         <img
                           src={track.coverUrl || currentSide.coverUrl}
                           alt={track.title}
+                          width={36}
+                          height={36}
                           loading="lazy"
+                          decoding="async"
                           className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0"
                         />
 

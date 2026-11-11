@@ -226,9 +226,40 @@ export function FloralEnvironmentCanvas({
     let dpr = 1;
     let farPlane: HTMLCanvasElement | null = null;
     let nearPlane: HTMLCanvasElement | null = null;
+    let skyPlane: HTMLCanvasElement | null = null;
+    let centerGlowSprite: HTMLCanvasElement | null = null;
+    let mistBottomSprite: HTMLCanvasElement | null = null;
+    let mistPulseSprite: HTMLCanvasElement | null = null;
+    const bokehSprites = new Map<string, HTMLCanvasElement>();
     let rafId = 0;
     let timeSec = 0;
     let lastTime = performance.now();
+
+    const makeBokehSprite = (rgba: string): HTMLCanvasElement => {
+      const existing = bokehSprites.get(rgba);
+
+      if (existing) return existing;
+
+      const size = 128;
+      const off = document.createElement('canvas');
+      off.width = size;
+      off.height = size;
+      const octx = off.getContext('2d');
+
+      if (octx) {
+        const half = size / 2;
+        const grad = octx.createRadialGradient(half, half, 0, half, half, half);
+        grad.addColorStop(0, `rgba(${rgba}, 0.085)`);
+        grad.addColorStop(0.55, `rgba(${rgba}, 0.04)`);
+        grad.addColorStop(1, `rgba(${rgba}, 0)`);
+        octx.fillStyle = grad;
+        octx.fillRect(0, 0, size, size);
+      }
+
+      bokehSprites.set(rgba, off);
+
+      return off;
+    };
 
     const rebuild = () => {
       width = window.innerWidth;
@@ -240,6 +271,85 @@ export function FloralEnvironmentCanvas({
       canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      // Pre-bake static twilight vertical sky backdrop once per resize
+      const skyOff = document.createElement('canvas');
+      skyOff.width = 1;
+      skyOff.height = Math.max(1, Math.round(height));
+      const skyCtx = skyOff.getContext('2d');
+
+      if (skyCtx) {
+        const skyGrad = skyCtx.createLinearGradient(0, 0, 0, skyOff.height);
+        skyGrad.addColorStop(0, '#030814');
+        skyGrad.addColorStop(0.42, '#061128');
+        skyGrad.addColorStop(0.78, '#091A3C');
+        skyGrad.addColorStop(1, '#040917');
+        skyCtx.fillStyle = skyGrad;
+        skyCtx.fillRect(0, 0, 1, skyOff.height);
+      }
+
+      skyPlane = skyOff;
+
+      // Pre-bake cerulean nebula radial glow sprite once
+      if (!centerGlowSprite) {
+        const glowOff = document.createElement('canvas');
+        glowOff.width = 256;
+        glowOff.height = 256;
+        const glowCtx = glowOff.getContext('2d');
+
+        if (glowCtx) {
+          const cg = glowCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+          cg.addColorStop(0, 'rgba(30, 74, 148, 0.24)');
+          cg.addColorStop(0.45, 'rgba(18, 46, 98, 0.14)');
+          cg.addColorStop(1, 'rgba(4, 9, 23, 0)');
+          glowCtx.fillStyle = cg;
+          glowCtx.fillRect(0, 0, 256, 256);
+        }
+
+        centerGlowSprite = glowOff;
+      }
+
+      // Pre-bake base bokeh color textures
+      for (const b of DISTANT_BOKEH) {
+        makeBokehSprite(b.rgba);
+      }
+
+      // Pre-bake mist horizon gradients (pulse + base darkening) cleanly
+      if (!mistPulseSprite) {
+        const pulseOff = document.createElement('canvas');
+        pulseOff.width = 1;
+        pulseOff.height = 128;
+        const pulseCtx = pulseOff.getContext('2d');
+
+        if (pulseCtx) {
+          const mg = pulseCtx.createLinearGradient(0, 0, 0, 128);
+          mg.addColorStop(0, 'rgba(26, 68, 134, 0)');
+          mg.addColorStop(0.48, 'rgba(26, 68, 134, 1)');
+          mg.addColorStop(1, 'rgba(26, 68, 134, 0)');
+          pulseCtx.fillStyle = mg;
+          pulseCtx.fillRect(0, 0, 1, 128);
+        }
+
+        mistPulseSprite = pulseOff;
+      }
+
+      if (!mistBottomSprite) {
+        const bottomOff = document.createElement('canvas');
+        bottomOff.width = 1;
+        bottomOff.height = 128;
+        const bottomCtx = bottomOff.getContext('2d');
+
+        if (bottomCtx) {
+          const bg = bottomCtx.createLinearGradient(0, 0, 0, 128);
+          bg.addColorStop(0, 'rgba(4, 9, 23, 0)');
+          bg.addColorStop(0.48, 'rgba(4, 9, 23, 0)');
+          bg.addColorStop(1, 'rgba(4, 9, 23, 0.45)');
+          bottomCtx.fillStyle = bg;
+          bottomCtx.fillRect(0, 0, 1, 128);
+        }
+
+        mistBottomSprite = bottomOff;
+      }
+
       farPlane = bakeGardenPlane(width + 120, height, 6, true);
       nearPlane = bakeGardenPlane(width + 160, height, 3, false);
     };
@@ -248,48 +358,36 @@ export function FloralEnvironmentCanvas({
       const px = (parallaxRef.current.x - 0.5) * 2;
       const py = (parallaxRef.current.y - 0.5) * 2;
 
-      // Expansive twilight zenith to enchanted misty horizon gradient
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-      skyGrad.addColorStop(0, '#030814');
-      skyGrad.addColorStop(0.42, '#061128');
-      skyGrad.addColorStop(0.78, '#091A3C');
-      skyGrad.addColorStop(1, '#040917');
-      ctx.fillStyle = skyGrad;
-      ctx.fillRect(0, 0, width, height);
+      // Expansive twilight zenith to enchanted misty horizon gradient (cached)
+      if (skyPlane) {
+        ctx.drawImage(skyPlane, 0, 0, width, height);
+      }
 
-      // Subtle zenith cerulean nebula haze
-      const centerGlow = ctx.createRadialGradient(
-        width * 0.5 + px * 16,
-        height * 0.48 + py * 12,
-        0,
-        width * 0.5 + px * 16,
-        height * 0.48 + py * 12,
-        Math.max(width, height) * 0.62,
-      );
+      // Subtle zenith cerulean nebula haze (cached sprite)
+      if (centerGlowSprite) {
+        const glowRadius = Math.max(width, height) * 0.62;
+        const gx = width * 0.5 + px * 16 - glowRadius;
+        const gy = height * 0.48 + py * 12 - glowRadius;
+        ctx.drawImage(centerGlowSprite, gx, gy, glowRadius * 2, glowRadius * 2);
+      }
 
-      centerGlow.addColorStop(0, 'rgba(30, 74, 148, 0.24)');
-      centerGlow.addColorStop(0.45, 'rgba(18, 46, 98, 0.14)');
-      centerGlow.addColorStop(1, 'rgba(4, 9, 23, 0)');
-      ctx.fillStyle = centerGlow;
-      ctx.fillRect(0, 0, width, height);
+      // Soft defocused dreamy flower/amber bokeh pools via cached alpha sprites
+      const minDim = Math.min(width, height);
 
-      // Soft defocused dreamy flower/amber bokeh pools
       for (const b of DISTANT_BOKEH) {
         const breath = 0.55 + 0.45 * sampleLightBreath(t, b.phase);
         const bx = b.xFrac * width + px * (12 * b.depth);
         const by = b.yFrac * height + py * (8 * b.depth);
-        const br = Math.min(width, height) * b.rFrac;
+        const br = minDim * b.rFrac;
+        const sprite = bokehSprites.get(b.rgba);
 
-        const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br);
-        grad.addColorStop(0, `rgba(${b.rgba}, ${(0.085 * breath).toFixed(4)})`);
-        grad.addColorStop(0.55, `rgba(${b.rgba}, ${(0.04 * breath).toFixed(4)})`);
-        grad.addColorStop(1, `rgba(${b.rgba}, 0)`);
-
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.fill();
+        if (sprite) {
+          ctx.globalAlpha = breath;
+          ctx.drawImage(sprite, bx - br, by - br, br * 2, br * 2);
+        }
       }
+
+      ctx.globalAlpha = 1;
 
       // Far floral silhouette horizon
       if (farPlane) {
@@ -300,12 +398,19 @@ export function FloralEnvironmentCanvas({
 
       // Mid-horizon twilight mist band gently drifting
       const mistDrift = Math.sin(t * 0.12) * width * 0.04;
-      const mistBand = ctx.createLinearGradient(0, height * 0.68, 0, height);
-      mistBand.addColorStop(0, 'rgba(20, 52, 110, 0)');
-      mistBand.addColorStop(0.48, `rgba(26, 68, 134, ${(0.12 + 0.04 * Math.sin(t * 0.22)).toFixed(3)})`);
-      mistBand.addColorStop(1, 'rgba(4, 9, 23, 0.45)');
-      ctx.fillStyle = mistBand;
-      ctx.fillRect(mistDrift * 0.2, height * 0.68, width, height * 0.32);
+      const mistTop = height * 0.68;
+      const mistHeight = height * 0.32;
+      const mistX = mistDrift * 0.2;
+
+      if (mistPulseSprite) {
+        ctx.globalAlpha = 0.12 + 0.04 * Math.sin(t * 0.22);
+        ctx.drawImage(mistPulseSprite, mistX, mistTop, width, mistHeight);
+        ctx.globalAlpha = 1;
+      }
+
+      if (mistBottomSprite) {
+        ctx.drawImage(mistBottomSprite, mistX, mistTop, width, mistHeight);
+      }
 
       // Closer out-of-focus meadow plane
       if (nearPlane) {

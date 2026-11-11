@@ -8,14 +8,31 @@ import {
   useReducedMotion,
 } from 'motion/react';
 
+let sharedEnvelopeAudioCtx: AudioContext | null = null;
+
+function getSharedEnvelopeAudioContext(): AudioContext | null {
+  const AudioCtx = window.AudioContext;
+
+  if (!AudioCtx) return null;
+
+  if (!sharedEnvelopeAudioCtx || sharedEnvelopeAudioCtx.state === 'closed') {
+    sharedEnvelopeAudioCtx = new AudioCtx();
+  }
+
+  if (sharedEnvelopeAudioCtx.state === 'suspended') {
+    sharedEnvelopeAudioCtx.resume().catch(() => {});
+  }
+
+  return sharedEnvelopeAudioCtx;
+}
+
 // Synthesize gentle paper rustle and crystal chime on envelope open / fold
 export function playEnvelopeAudio(kind: 'open' | 'close' | 'tap') {
   try {
-    const AudioCtx = window.AudioContext;
+    const ctx = getSharedEnvelopeAudioContext();
 
-    if (!AudioCtx) return;
+    if (!ctx) return;
 
-    const ctx = new AudioCtx();
     const now = ctx.currentTime;
 
     // Soft textured paper rustle
@@ -61,10 +78,6 @@ export function playEnvelopeAudio(kind: 'open' | 'close' | 'tap') {
       osc.start(now + 0.03);
       osc.stop(now + 0.46);
     }
-
-    setTimeout(() => {
-      ctx.close().catch(() => {});
-    }, 550);
   } catch {
     // Silent fallback when browser autoplay blocks Web Audio
   }
