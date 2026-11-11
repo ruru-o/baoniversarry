@@ -98,7 +98,7 @@ export default function App() {
             "there's a lot more to come",
             "there's also something i'd like to express",
             "i know it's a lot",
-            "i hope you like it",
+            'welp, i guess it is what it is',
           ]}
           beatHeightVh={95}
           variant="intimate"

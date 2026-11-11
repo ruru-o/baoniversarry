@@ -606,7 +606,59 @@ export function VinylPlayer() {
   const [audioUnlockNeeded, setAudioUnlockNeeded] = useState<boolean>(false);
 
   const stageRef = useRef<HTMLElement>(null);
+  const stickyContainerRef = useRef<HTMLDivElement>(null);
+  const titleBlockRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  const [introOffsetPx, setIntroOffsetPx] = useState<number>(() =>
+    globalThis.window ? Math.round(globalThis.window.innerHeight * 0.34) : 260
+  );
+
   const prefersReducedMotion = useReducedMotion();
+
+  // Compute exact vertical intro offset so heading rests dead-center in viewport before gliding into place
+  useEffect(() => {
+    if (prefersReducedMotion) return undefined;
+
+    const measureCenterOffset = () => {
+      const stickyEl = stickyContainerRef.current;
+      const blockEl = titleBlockRef.current;
+      const headingEl = headingRef.current;
+
+      if (!stickyEl || !blockEl || !headingEl) return;
+
+      const stickyRect = stickyEl.getBoundingClientRect();
+      const blockRect = blockEl.getBoundingClientRect();
+      const headingRect = headingEl.getBoundingClientRect();
+
+      if (headingRect.height <= 0) return;
+
+      const restCenterYInSticky = blockRect.top - stickyRect.top + headingRect.height / 2;
+      const targetCenterY = window.innerHeight * 0.5;
+      const nextOffset = Math.max(0, Math.round(targetCenterY - restCenterYInSticky));
+
+      setIntroOffsetPx((prev) => (Math.abs(prev - nextOffset) >= 2 ? nextOffset : prev));
+    };
+
+    measureCenterOffset();
+    document.fonts?.ready.then(measureCenterOffset).catch(() => {});
+
+    const ResizeObs = globalThis.ResizeObserver;
+    let observer: ResizeObserver | null = null;
+
+    if (ResizeObs && stickyContainerRef.current && headingRef.current) {
+      observer = new ResizeObs(measureCenterOffset);
+      observer.observe(stickyContainerRef.current);
+      observer.observe(headingRef.current);
+    }
+
+    window.addEventListener('resize', measureCenterOffset);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measureCenterOffset);
+    };
+  }, [prefersReducedMotion]);
 
   const { scrollYProgress: morphProgress } = useScroll({
     target: stageRef,
@@ -619,7 +671,13 @@ export function VinylPlayer() {
   });
 
   const titleOpacity = useTransform(morphProgress, [0, 0.08, 1], [0, 1, 1]);
-  const titleY = useTransform(morphProgress, [0, 0.1, 0.6, 0.86, 1], ['28vh', '26vh', '26vh', '0vh', '0vh']);
+
+  const titleY = useTransform(
+    morphProgress,
+    [0, 0.1, 0.6, 0.86, 1],
+    [introOffsetPx + 18, introOffsetPx, introOffsetPx, 0, 0]
+  );
+
   const titleScale = useTransform(morphProgress, [0, 0.1, 0.6, 0.86, 1], [0.985, 1, 1, 1, 1]);
 
   const categoryOpacity = useTransform(morphProgress, [0.62, 0.82], [0, 1]);
@@ -2053,24 +2111,26 @@ export function VinylPlayer() {
       </div>
 
       <div
+        ref={stickyContainerRef}
         className={
           prefersReducedMotion
-            ? ''
-            : 'sticky top-0 min-h-screen flex flex-col justify-start lg:justify-center pt-20 pb-4 lg:py-20 px-4 sm:px-6 max-w-6xl mx-auto'
+            ? 'w-full px-4 sm:px-6 max-w-6xl mx-auto py-16'
+            : 'sticky top-0 min-h-screen w-full flex flex-col justify-start lg:justify-center pt-20 pb-4 lg:py-20 px-4 sm:px-6 max-w-6xl mx-auto'
         }
       >
         {/* Section Title & Playlist Side Switcher (scroll-morphed from centered title) */}
-        <div className="text-center mb-3 sm:mb-8 lg:mb-10">
+        <div ref={titleBlockRef} className="w-full text-center mb-3 sm:mb-8 lg:mb-10">
           {prefersReducedMotion ? (
             <h2
-              className="font-display italic tracking-tight heading-luminous select-text max-w-3xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance"
+              className="font-display italic tracking-tight heading-luminous select-text w-full max-w-4xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance text-center"
               style={{ fontSize: 'clamp(1.75rem, 4.2vw, 3.1rem)' }}
             >
-              Songs that we listen all throughout the years
+              Songs that we've listened all throughout the years
             </h2>
           ) : (
             <motion.h2
-              className="font-display italic tracking-tight select-text max-w-3xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance"
+              ref={headingRef}
+              className="font-display italic tracking-tight select-text w-full max-w-4xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance text-center"
               style={{
                 fontSize: 'clamp(1.38rem, 4.1vw, 3.05rem)',
                 opacity: titleOpacity,
@@ -2080,7 +2140,7 @@ export function VinylPlayer() {
               }}
             >
               <ScrollLitSentence
-                text="Songs that we listen all throughout the years"
+                text="Songs that we've listened all throughout the years"
                 progress={morphProgress}
                 sweepStart={0.08}
                 sweepEnd={0.58}

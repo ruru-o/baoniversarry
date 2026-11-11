@@ -87,7 +87,7 @@ interface ScrollLitSentenceProps {
   sweepEnd: number;
 }
 
-/** Wraps each word in a GPU-composited scroll illumination wave with natural wrapping. */
+/** Wraps each word in a GPU-composited scroll illumination wave inside natural centered inline flow. */
 export function ScrollLitSentence({
   text,
   progress,
@@ -98,13 +98,13 @@ export function ScrollLitSentence({
 
   return (
     <span
-      className="inline-flex flex-wrap items-baseline justify-center gap-x-[0.27em] gap-y-[0.06em]"
+      className="inline"
       style={{
         textShadow: '0 0 26px rgba(187, 210, 239, 0.36), 0 2px 10px rgba(8, 14, 32, 0.6)',
       }}
     >
       {words.map((word, idx) => (
-        <span key={`${word}-${idx}`} className="contents">
+        <span key={`${word}-${idx}`}>
           <ScrollLitWord
             word={word}
             index={idx}
