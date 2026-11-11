@@ -155,6 +155,7 @@ class ComfyPianoEngine {
   private lastWokeAt = 0;
   private pendingStart: Promise<boolean> | null = null;
   private listeners = new Set<(status: PianoStatus) => void>();
+  private stateChangeHandler: (() => void) | null = null;
 
   subscribe(listener: (status: PianoStatus) => void): () => void {
     this.listeners.add(listener);
@@ -239,6 +240,14 @@ class ComfyPianoEngine {
     this.scrollDuckGain = scrollDuckGain;
     this.masterGain = masterGain;
     this.hammerNoiseBuffer = noiseBuf;
+
+    this.stateChangeHandler = () => {
+      if (this.ctx === ctx && ctx.state === 'running' && this.status === 'waiting') {
+        this.activateRunningContext(ctx);
+      }
+    };
+
+    ctx.addEventListener('statechange', this.stateChangeHandler);
 
     return ctx;
   }
@@ -353,9 +362,31 @@ class ComfyPianoEngine {
     this.schedulerTimer = window.setInterval(this.runSchedulerTick, 120);
   }
 
-  /** Attempts immediate playback on load or resumes cleanly on first gesture. */
+  private activateRunningContext(ctx: AudioContext) {
+    if (this.status !== 'waiting' || ctx.state !== 'running') return;
+
+    this.lastWokeAt = performance.now();
+    this.beginNoteLoop();
+
+    if (!this.userMuted && this.masterGain) {
+      const now = ctx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(Math.max(0.0001, this.masterGain.gain.value), now);
+      this.masterGain.gain.linearRampToValueAtTime(TARGET_MASTER_GAIN, now + 0.55);
+      this.setStatus('playing');
+    }
+  }
+
+  /** Attempts immediate playback on load or resumes cleanly when browser grants audio activation. */
   async startOrResume(userInitiated = false): Promise<boolean> {
     if (this.getStatus() === 'stopped') return false;
+
+    const existingCtx = this.ctx;
+
+    if (userInitiated && existingCtx?.state === 'suspended') {
+      // Invoke resume() synchronously inside the active gesture stack frame even if a prior race is winding down
+      void existingCtx.resume().catch(() => {});
+    }
 
     if (this.pendingStart) {
       return this.pendingStart;
@@ -367,17 +398,18 @@ class ComfyPianoEngine {
       if (!ctx || !this.masterGain) return false;
 
       if (ctx.state === 'suspended') {
-        if (!userInitiated) {
-          this.setStatus('waiting');
-
-          return false;
-        }
-
         try {
-          await ctx.resume();
-          this.lastWokeAt = performance.now();
+          const resumePromise = ctx.resume();
+
+          // Bound the wait so strict cold-tab autoplay blocks never lock pendingStart open across subsequent events
+          await Promise.race([
+            resumePromise,
+            new Promise<void>((resolve) => {
+              window.setTimeout(resolve, 180);
+            }),
+          ]);
         } catch {
-          return false;
+          // Remain armed on statechange / next activation
         }
       }
 
@@ -389,15 +421,7 @@ class ComfyPianoEngine {
 
       if (this.getStatus() === 'stopped') return false;
 
-      this.beginNoteLoop();
-
-      if (!this.userMuted) {
-        const now = ctx.currentTime;
-        this.masterGain.gain.cancelScheduledValues(now);
-        this.masterGain.gain.setValueAtTime(Math.max(0.0001, this.masterGain.gain.value), now);
-        this.masterGain.gain.linearRampToValueAtTime(TARGET_MASTER_GAIN, now + 1.6);
-        this.setStatus('playing');
-      }
+      this.activateRunningContext(ctx);
 
       return true;
     };
@@ -485,6 +509,12 @@ class ComfyPianoEngine {
 
     if (this.ctx) {
       const ctxToClose = this.ctx;
+
+      if (this.stateChangeHandler) {
+        ctxToClose.removeEventListener('statechange', this.stateChangeHandler);
+        this.stateChangeHandler = null;
+      }
+
       this.ctx = null;
       this.voiceBus = null;
       this.scrollDuckGain = null;

@@ -39,15 +39,35 @@ export function AmbientPianoControl() {
       }
     };
 
-    window.addEventListener('pointerdown', wakeOnFirstGesture, { capture: true, passive: true });
-    window.addEventListener('keydown', wakeOnFirstGesture, { capture: true, passive: true });
-    window.addEventListener('touchstart', wakeOnFirstGesture, { capture: true, passive: true });
+    const retryOnFocus = () => {
+      if (document.visibilityState === 'visible' && comfyPiano.getStatus() === 'waiting') {
+        void comfyPiano.startOrResume(false);
+      }
+    };
+
+    const gestureEvents = [
+      'click',
+      'mousedown',
+      'pointerup',
+      'mouseup',
+      'keydown',
+      'touchend',
+    ] as const;
+
+    gestureEvents.forEach((evt) => {
+      window.addEventListener(evt, wakeOnFirstGesture, { capture: true, passive: true });
+    });
+
+    window.addEventListener('focus', retryOnFocus);
+    document.addEventListener('visibilitychange', retryOnFocus);
 
     return () => {
       unsubscribe();
-      window.removeEventListener('pointerdown', wakeOnFirstGesture, { capture: true });
-      window.removeEventListener('keydown', wakeOnFirstGesture, { capture: true });
-      window.removeEventListener('touchstart', wakeOnFirstGesture, { capture: true });
+      gestureEvents.forEach((evt) => {
+        window.removeEventListener(evt, wakeOnFirstGesture, { capture: true });
+      });
+      window.removeEventListener('focus', retryOnFocus);
+      document.removeEventListener('visibilitychange', retryOnFocus);
     };
   }, []);
 
