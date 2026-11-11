@@ -48,12 +48,35 @@ describe('Anniversary Experience Verification', () => {
     expect(SPOTIFY_PLAYLISTS[0].embedUrl).toContain('spotify.com/embed');
     expect(SPOTIFY_PLAYLISTS[1].embedUrl).toContain('spotify.com/embed');
 
+    const seenById = new Map<string, { title: string; artist: string; duration: number; youtubeId: string }>();
+
     for (const side of SPOTIFY_PLAYLISTS) {
+      expect(side.tracks.length).toBeGreaterThan(20);
+
       for (const track of side.tracks) {
         expect(Boolean(track.previewUrl || track.localAudioUrl)).toBe(true);
         expect(track.youtubeId).toMatch(/^[A-Za-z0-9_-]{11}$/);
         expect(track.duration).toBeGreaterThan(60);
+        const prev = seenById.get(track.id);
+
+        if (prev) {
+          expect(track.title).toBe(prev.title);
+          expect(track.artist).toBe(prev.artist);
+          expect(track.duration).toBe(prev.duration);
+          expect(track.youtubeId).toBe(prev.youtubeId);
+        } else {
+          seenById.set(track.id, {
+            title: track.title,
+            artist: track.artist,
+            duration: track.duration,
+            youtubeId: track.youtubeId,
+          });
+        }
       }
     }
+
+    expect(SPOTIFY_PLAYLISTS[0].tracks.length).toBe(41);
+    expect(SPOTIFY_PLAYLISTS[1].tracks.length).toBe(29);
+    expect(seenById.size).toBe(65);
   });
 });

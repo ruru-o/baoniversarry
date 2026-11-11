@@ -1418,7 +1418,7 @@ export function VinylPlayer() {
         height: '200',
         width: '200',
         host: hostUrl,
-        videoId: initialVideoId || 'BLYMjHAa0sE',
+        videoId: initialVideoId || 'boMFsedHSBg',
         playerVars: {
           autoplay: 0,
           controls: 0,
@@ -1527,7 +1527,7 @@ export function VinylPlayer() {
     const initYtPlayer = () => {
       if (ytPlayerRef.current) return;
 
-      spawnYtPlayer(YT_PRIMARY_HOST, currentTrackRef.current.youtubeId || 'BLYMjHAa0sE', 0);
+      spawnYtPlayer(YT_PRIMARY_HOST, currentTrackRef.current.youtubeId || 'boMFsedHSBg', 0);
     };
 
     let scriptElForCleanup: HTMLElement | null = null;
