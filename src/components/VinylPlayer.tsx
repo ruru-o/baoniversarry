@@ -388,6 +388,8 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+let sharedTactileAudioCtx: AudioContext | null = null;
+
 // Synthesize soft mechanical tactile feedback on needle drop / vinyl scrub
 function playTactileAudio(kind: 'needle' | 'scrub') {
   try {
@@ -395,7 +397,18 @@ function playTactileAudio(kind: 'needle' | 'scrub') {
 
     if (!AudioCtx) return;
 
-    const ctx = new AudioCtx();
+    if (!sharedTactileAudioCtx || sharedTactileAudioCtx.state === 'closed') {
+      sharedTactileAudioCtx = new AudioCtx();
+    }
+
+    const ctx = sharedTactileAudioCtx;
+
+    if (ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+
+      return;
+    }
+
     const now = ctx.currentTime;
     const dur = kind === 'needle' ? 0.1 : 0.035;
     const bufferSize = Math.floor(ctx.sampleRate * dur);
@@ -421,10 +434,6 @@ function playTactileAudio(kind: 'needle' | 'scrub') {
     filter.connect(gain);
     gain.connect(ctx.destination);
     noise.start(now);
-
-    setTimeout(() => {
-      ctx.close().catch(() => {});
-    }, 200);
   } catch {
     // Silent fallback when audio policy blocks context
   }
@@ -520,6 +529,7 @@ export function VinylPlayer() {
   const ytContainerRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<YTPlayerInstance | null>(null);
   const ytReadyRef = useRef<boolean>(false);
+  const ytUnavailableRef = useRef<boolean>(false);
   const htmlAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeEngineRef = useRef<'local' | 'youtube' | 'preview'>(DEFAULT_WAM_TRACK?.localAudioUrl ? 'local' : 'youtube');
 
@@ -550,6 +560,68 @@ export function VinylPlayer() {
     if (volumeRampRafRef.current) {
       cancelAnimationFrame(volumeRampRafRef.current);
       volumeRampRafRef.current = 0;
+    }
+  }, []);
+
+  const canUseYouTube = useCallback(
+    (track: PlaylistTrack) =>
+      Boolean(
+        track.youtubeId &&
+          !failedYtIdsRef.current.has(track.youtubeId) &&
+          !ytUnavailableRef.current &&
+          ytReadyRef.current &&
+          ytPlayerRef.current
+      ),
+    []
+  );
+
+  // Unlock the shared HTML5 Audio element inside a real user gesture so async fallback play() is allowed
+  const primeAudioOnGesture = useCallback(() => {
+    hasUserGestureRef.current = true;
+
+    const audio = htmlAudioRef.current;
+
+    if (!audio || htmlPrimedRef.current) {
+      return;
+    }
+
+    if (isPlayingRef.current && activeEngineRef.current !== 'youtube') {
+      htmlPrimedRef.current = true;
+
+      return;
+    }
+
+    const warmupUrl = currentTrackRef.current.localAudioUrl || currentTrackRef.current.previewUrl;
+
+    if (!warmupUrl) {
+      return;
+    }
+
+    if (!audio.src) {
+      audio.src = warmupUrl;
+    }
+
+    htmlPrimedRef.current = true;
+    audio.muted = true;
+    const warm = audio.play();
+
+    if (warm) {
+      warm
+        .then(() => {
+          if (!isPlayingRef.current || activeEngineRef.current === 'youtube') {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+
+          audio.muted = isMutedRef.current;
+        })
+        .catch(() => {
+          if (!isPlayingRef.current || activeEngineRef.current === 'youtube') {
+            htmlPrimedRef.current = false;
+          }
+
+          audio.muted = isMutedRef.current;
+        });
     }
   }, []);
 
@@ -615,59 +687,159 @@ export function VinylPlayer() {
     }
   }, []);
 
-  // Switch cleanly to Spotify MP3 preview when YouTube is blocked or restricted
+  // Switch cleanly to Spotify MP3 preview (or localAudioUrl) whenever YouTube is blocked or restricted
   const switchToPreviewFallback = useCallback(
     (track: PlaylistTrack, shouldPlay: boolean, swellVolume = false) => {
-      if (!track.previewUrl || !htmlAudioRef.current) {
+      const fallbackUrl = track.localAudioUrl || track.previewUrl;
+      const audioEl = htmlAudioRef.current;
+
+      if (!fallbackUrl || !audioEl) {
         setAudioUnlockNeeded(true);
 
         return;
       }
 
-      activeEngineRef.current = 'preview';
-      htmlAudioRef.current.muted = isMutedRef.current;
+      activeEngineRef.current = track.localAudioUrl ? 'local' : 'preview';
 
-      if (htmlAudioRef.current.src !== track.previewUrl) {
-        htmlAudioRef.current.src = track.previewUrl;
+      if (ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch {
+          // Ignored
+        }
+      }
+
+      const resolvedUrl = new URL(fallbackUrl, window.location.href).href;
+      audioEl.muted = isMutedRef.current;
+
+      if (audioEl.src !== resolvedUrl) {
+        audioEl.src = fallbackUrl;
       }
 
       if (!shouldPlay) {
-        htmlAudioRef.current.load();
+        audioEl.load();
 
         return;
       }
 
-      if (!hasUserGestureRef.current) {
-        htmlAudioRef.current.load();
+      const targetVol = isMutedRef.current ? 0 : volumeRef.current;
+      audioEl.volume = swellVolume ? 0 : targetVol;
 
-        if (!isMutedRef.current) {
-          setAudioUnlockNeeded(true);
-        }
-
-        return;
-      }
-
-      htmlAudioRef.current.volume = swellVolume ? 0 : isMutedRef.current ? 0 : volumeRef.current;
-
-      if (swellVolume) {
+      if (swellVolume && !isMutedRef.current) {
         startDramaticVolumeSwell();
+      } else {
+        cancelVolumeRamp();
       }
 
-      htmlAudioRef.current.play().catch(() => {
-        if (swellVolume) {
-          cancelVolumeRamp();
-        }
+      const attempt = audioEl.play();
 
-        setAudioUnlockNeeded(true);
-      });
+      if (attempt) {
+        attempt
+          .then(() => {
+            setAudioUnlockNeeded(false);
+          })
+          .catch(() => {
+            cancelVolumeRamp();
+            audioEl.volume = targetVol;
+
+            if (!isMutedRef.current) {
+              setAudioUnlockNeeded(true);
+            }
+          });
+      }
     },
     [cancelVolumeRamp, startDramaticVolumeSwell]
   );
 
   switchToPreviewFallbackRef.current = switchToPreviewFallback;
 
+  // Verify YouTube playback started & advances past 0:00; fall back automatically if blocked or stalled
+  const scheduleYouTubePlaybackCheck = useCallback(() => {
+    if (ytVerifyTimerRef.current) {
+      window.clearTimeout(ytVerifyTimerRef.current);
+      ytVerifyTimerRef.current = 0;
+    }
+
+    const inspectPlayback = (allowSecondBufferingWait: boolean) => {
+      if (!isPlayingRef.current || activeEngineRef.current !== 'youtube') return;
+
+      const activeTrack = currentTrackRef.current;
+      const yt = ytPlayerRef.current;
+
+      if (!ytReadyRef.current || ytUnavailableRef.current || !yt) {
+        if (activeTrack.youtubeId && ytUnavailableRef.current) {
+          failedYtIdsRef.current.add(activeTrack.youtubeId);
+        }
+
+        switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
+
+        return;
+      }
+
+      try {
+        const ytState = yt.getPlayerState?.();
+        const ytMuted = yt.isMuted?.() ?? false;
+        const ytTime = yt.getCurrentTime?.() ?? 0;
+
+        // 1 = PLAYING
+        if (ytState === 1) {
+          if (ytMuted && !isMutedRef.current) {
+            setAudioUnlockNeeded(true);
+          } else {
+            setAudioUnlockNeeded(false);
+          }
+
+          if (ytTime > 0.05 || !allowSecondBufferingWait) {
+            return;
+          }
+
+          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(false), 950);
+
+          return;
+        }
+
+        // 3 = BUFFERING -> give it one brief grace check, then fall back to direct MP3 if still stuck at 0:00
+        if (ytState === 3 && allowSecondBufferingWait) {
+          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(false), 1100);
+
+          return;
+        }
+
+        // Unstarted (-1), paused/blocked (2), cued (5), or hung buffering at 0:00 -> switch to MP3 stream
+        if (activeTrack.youtubeId && allowSecondBufferingWait === false) {
+          failedYtIdsRef.current.add(activeTrack.youtubeId);
+        }
+
+        if (activeTrack.previewUrl || activeTrack.localAudioUrl) {
+          switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
+        } else if (!hasUserGestureRef.current) {
+          yt.mute();
+          yt.playVideo();
+          setAudioUnlockNeeded(true);
+        } else {
+          setAudioUnlockNeeded(true);
+        }
+      } catch {
+        if (activeTrack.previewUrl || activeTrack.localAudioUrl) {
+          switchToPreviewFallback(activeTrack, true, false);
+        } else {
+          setAudioUnlockNeeded(true);
+        }
+      }
+    };
+
+    ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(true), 900);
+  }, [switchToPreviewFallback]);
+
+  scheduleYtCheckRef.current = scheduleYouTubePlaybackCheck;
+
   // Load a specific track across our dual audio engine
   const loadAndPlayTrack = useCallback((track: PlaylistTrack, shouldPlay: boolean) => {
+    if (ytVerifyTimerRef.current) {
+      window.clearTimeout(ytVerifyTimerRef.current);
+      ytVerifyTimerRef.current = 0;
+    }
+
     setCurrentTime(0);
     currentTimeRef.current = 0;
     setTrackDuration(track.duration);
@@ -686,7 +858,7 @@ export function VinylPlayer() {
       }
     }
 
-    // Prefer crisp offline local full MP3 if present, otherwise full YouTube track via YT IFrame
+    // Prefer crisp offline local full MP3 if present, otherwise full YouTube track with instant MP3 fallback
     if (track.localAudioUrl) {
       activeEngineRef.current = 'local';
 
@@ -696,83 +868,48 @@ export function VinylPlayer() {
         htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
 
         if (shouldPlay) {
-          htmlAudioRef.current.play().catch(() => {});
+          htmlAudioRef.current
+            .play()
+            .then(() => {
+              setAudioUnlockNeeded(false);
+            })
+            .catch(() => {
+              if (!isMutedRef.current) {
+                setAudioUnlockNeeded(true);
+              }
+            });
         }
       }
 
       return;
     }
 
-    if (track.youtubeId && !failedYtIdsRef.current.has(track.youtubeId)) {
+    if (canUseYouTube(track) && track.youtubeId) {
       activeEngineRef.current = 'youtube';
 
-      if (ytPlayerRef.current && ytReadyRef.current) {
-        if (shouldPlay) {
-          if (hasUserGestureRef.current && !isMutedRef.current) {
-            ytPlayerRef.current.unMute();
-          } else {
-            ytPlayerRef.current.mute();
-          }
+      const yt = ytPlayerRef.current!;
 
-          ytPlayerRef.current.loadVideoById(track.youtubeId, 0);
-          ytPlayerRef.current.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
-          ytPlayerRef.current.playVideo();
+      if (shouldPlay) {
+        if (hasUserGestureRef.current && !isMutedRef.current) {
+          yt.unMute();
         } else {
-          ytPlayerRef.current.cueVideoById(track.youtubeId, 0);
+          yt.mute();
         }
+
+        yt.loadVideoById(track.youtubeId, 0);
+        yt.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
+        yt.playVideo();
+        scheduleYouTubePlaybackCheck();
+      } else {
+        yt.cueVideoById(track.youtubeId, 0);
       }
 
       return;
     }
 
-    // Fallback: Spotify audio preview URL
+    // Fallback: Spotify audio preview URL (immediate whenever YouTube is blocked, unavailable, or failed)
     switchToPreviewFallback(track, shouldPlay, false);
-  }, [switchToPreviewFallback]);
-
-  // Verify YouTube playback started after autoplay request; fall back to muted stream + 1-tap unmute or preview
-  const scheduleYouTubePlaybackCheck = useCallback(() => {
-    if (ytVerifyTimerRef.current) {
-      window.clearTimeout(ytVerifyTimerRef.current);
-    }
-
-    ytVerifyTimerRef.current = window.setTimeout(() => {
-      if (!isPlayingRef.current || activeEngineRef.current !== 'youtube') return;
-
-      const activeTrack = currentTrackRef.current;
-
-      try {
-        const yt = ytPlayerRef.current;
-        const ytState = yt?.getPlayerState?.();
-        const ytMuted = yt?.isMuted?.() ?? false;
-
-        // 1 = PLAYING, 3 = BUFFERING
-        if (ytState === 1 || ytState === 3) {
-          if (ytMuted && !isMutedRef.current) {
-            setAudioUnlockNeeded(true);
-          } else {
-            setAudioUnlockNeeded(false);
-          }
-
-          return;
-        }
-
-        // If YouTube stayed unstarted/blocked after timeout, switch cleanly to Spotify preview fallback
-        if (activeTrack.previewUrl) {
-          switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
-        } else if (!hasUserGestureRef.current && yt && ytReadyRef.current) {
-          yt.mute();
-          yt.playVideo();
-          setAudioUnlockNeeded(true);
-        } else {
-          setAudioUnlockNeeded(true);
-        }
-      } catch {
-        setAudioUnlockNeeded(true);
-      }
-    }, 850);
-  }, [switchToPreviewFallback]);
-
-  scheduleYtCheckRef.current = scheduleYouTubePlaybackCheck;
+  }, [canUseYouTube, scheduleYouTubePlaybackCheck, switchToPreviewFallback]);
 
   // Play currently loaded active track (with dramatic crescendo fade-in)
   const triggerDramaticAutoplay = useCallback(() => {
@@ -783,6 +920,7 @@ export function VinylPlayer() {
     if (!activeTrack) return;
 
     hasAutoPlayedRef.current = true;
+    isPlayingRef.current = true;
     setIsDramaticArrival(true);
 
     if (arrivalTimerRef.current) {
@@ -799,38 +937,13 @@ export function VinylPlayer() {
       playTactileAudio('needle');
     }
 
-    startDramaticVolumeSwell();
-
-    if (activeTrack.localAudioUrl || (!activeTrack.youtubeId && activeTrack.previewUrl)) {
-      const targetUrl = activeTrack.localAudioUrl || activeTrack.previewUrl;
-      activeEngineRef.current = activeTrack.localAudioUrl ? 'local' : 'preview';
-
-      if (htmlAudioRef.current) {
-        htmlAudioRef.current.muted = isMutedRef.current;
-
-        if (!htmlAudioRef.current.src.includes(targetUrl)) {
-          htmlAudioRef.current.src = targetUrl;
-        }
-
-        htmlAudioRef.current.volume = 0;
-        const playAttempt = htmlAudioRef.current.play();
-
-        if (playAttempt) {
-          playAttempt
-            .then(() => {
-              setAudioUnlockNeeded(false);
-            })
-            .catch(() => {
-              cancelVolumeRamp();
-              setAudioUnlockNeeded(true);
-            });
-        }
-      }
+    if (activeTrack.localAudioUrl) {
+      switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
 
       return;
     }
 
-    if (activeTrack.youtubeId && !failedYtIdsRef.current.has(activeTrack.youtubeId)) {
+    if (activeTrack.youtubeId && !failedYtIdsRef.current.has(activeTrack.youtubeId) && !ytUnavailableRef.current) {
       activeEngineRef.current = 'youtube';
 
       if (ytPlayerRef.current && ytReadyRef.current) {
@@ -838,6 +951,7 @@ export function VinylPlayer() {
           if (hasUserGestureRef.current && !isMutedRef.current) {
             ytPlayerRef.current.unMute();
             ytPlayerRef.current.setVolume(0);
+            startDramaticVolumeSwell();
           } else {
             ytPlayerRef.current.mute();
 
@@ -850,9 +964,9 @@ export function VinylPlayer() {
         } catch {
           // Verified by timer below
         }
-
-        scheduleYouTubePlaybackCheck();
       }
+
+      scheduleYouTubePlaybackCheck();
 
       return;
     }
@@ -885,35 +999,11 @@ export function VinylPlayer() {
   // Track real user activation, handle navbar jump trigger, and catch initial already-scrolled viewport
   useEffect(() => {
     const markGesture = () => {
-      hasUserGestureRef.current = true;
-
-      // Silently pre-warm HTML5 audio element inside the first real gesture when idle
-      if (!htmlPrimedRef.current && htmlAudioRef.current && htmlAudioRef.current.src && !isPlayingRef.current) {
-        htmlPrimedRef.current = true;
-        const audio = htmlAudioRef.current;
-        const prevMuted = audio.muted;
-        audio.muted = true;
-        const warm = audio.play();
-
-        if (warm) {
-          warm
-            .then(() => {
-              if (!isPlayingRef.current) {
-                audio.pause();
-                audio.currentTime = 0;
-              }
-
-              audio.muted = prevMuted;
-            })
-            .catch(() => {
-              audio.muted = prevMuted;
-            });
-        }
-      }
+      primeAudioOnGesture();
     };
 
     const handleNavPlay = () => {
-      hasUserGestureRef.current = true;
+      primeAudioOnGesture();
       comfyPiano.fadeOutAndStop(1.35);
       triggerDramaticAutoplay();
     };
@@ -955,7 +1045,7 @@ export function VinylPlayer() {
         observer.disconnect();
       }
     };
-  }, [introHandoffProgress, morphProgress, prefersReducedMotion, triggerDramaticAutoplay]);
+  }, [introHandoffProgress, morphProgress, prefersReducedMotion, primeAudioOnGesture, triggerDramaticAutoplay]);
 
   // Cleanup scroll autoplay timers & volume ramps on unmount
   useEffect(() => {
@@ -989,34 +1079,71 @@ export function VinylPlayer() {
     }
 
     const nextTrack = list[nextIdx];
+    primeAudioOnGesture();
     cancelVolumeRamp();
     setAudioUnlockNeeded(false);
+    isPlayingRef.current = true;
     setActiveTrackIdx(nextIdx);
     setIsPlaying(true);
     playTactileAudio('needle');
     loadAndPlayTrack(nextTrack, true);
-  }, [cancelVolumeRamp, loadAndPlayTrack]);
+  }, [cancelVolumeRamp, loadAndPlayTrack, primeAudioOnGesture]);
 
   // Ref for stable ended callback
   const handleStepTrackRef = useRef(handleStepTrack);
   handleStepTrackRef.current = handleStepTrack;
 
-  // Initialize hidden YouTube IFrame API player + HTML5 Audio element once
+  // Initialize YouTube IFrame API player + HTML5 Audio element once
   useEffect(() => {
+    let isDisposed = false;
+    let ytBootTimer = 0;
+
     const audioEl = new Audio();
     audioEl.preload = 'metadata';
     audioEl.volume = volumeRef.current;
 
-    audioEl.addEventListener('ended', () => {
+    const handleAudioEnded = () => {
       if (activeEngineRef.current !== 'youtube') {
         handleStepTrackRef.current(1);
       }
-    });
+    };
+
+    const handleAudioError = () => {
+      const track = currentTrackRef.current;
+
+      if (activeEngineRef.current === 'local' && track.previewUrl && audioEl.src !== track.previewUrl) {
+        activeEngineRef.current = 'preview';
+        audioEl.src = track.previewUrl;
+
+        if (isPlayingRef.current) {
+          audioEl.play().catch(() => {
+            setAudioUnlockNeeded(true);
+          });
+        }
+      }
+    };
+
+    audioEl.addEventListener('ended', handleAudioEnded);
+    audioEl.addEventListener('error', handleAudioError);
 
     htmlAudioRef.current = audioEl;
 
+    const markYtUnavailable = () => {
+      ytUnavailableRef.current = true;
+
+      if (ytBootTimer) {
+        window.clearTimeout(ytBootTimer);
+        ytBootTimer = 0;
+      }
+
+      if (!isDisposed && isPlayingRef.current && activeEngineRef.current === 'youtube') {
+        cancelVolumeRamp();
+        switchToPreviewFallbackRef.current(currentTrackRef.current, true, hasUserGestureRef.current);
+      }
+    };
+
     const initYtPlayer = () => {
-      if (!ytContainerRef.current || !window.YT?.Player || ytPlayerRef.current) return;
+      if (isDisposed || !ytContainerRef.current || !window.YT?.Player || ytPlayerRef.current) return;
 
       ytPlayerRef.current = new window.YT.Player(ytContainerRef.current, {
         height: '200',
@@ -1034,7 +1161,13 @@ export function VinylPlayer() {
         },
         events: {
           onReady: (ev) => {
+            if (ytBootTimer) {
+              window.clearTimeout(ytBootTimer);
+              ytBootTimer = 0;
+            }
+
             ytReadyRef.current = true;
+            ytUnavailableRef.current = false;
             ev.target.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
 
             if (isPlayingRef.current && activeEngineRef.current === 'youtube') {
@@ -1093,31 +1226,60 @@ export function VinylPlayer() {
       });
     };
 
+    let scriptElForCleanup: HTMLElement | null = null;
+
     if (window.YT?.Player) {
       initYtPlayer();
     } else {
       window.onYouTubeIframeAPIReady = initYtPlayer;
+      ytBootTimer = window.setTimeout(() => {
+        if (!ytReadyRef.current) {
+          markYtUnavailable();
+        }
+      }, 2200);
 
-      if (!document.getElementById('yt-iframe-api-script')) {
+      let ytScriptEl = document.getElementById('yt-iframe-api-script');
+
+      if (!ytScriptEl) {
         const script = document.createElement('script');
         script.id = 'yt-iframe-api-script';
         script.src = 'https://www.youtube.com/iframe_api';
         document.head.appendChild(script);
+        ytScriptEl = script;
       }
+
+      ytScriptEl.addEventListener('error', markYtUnavailable);
+      scriptElForCleanup = ytScriptEl;
     }
 
-    // Load initial track cleanly without autoplay block
+    // Load initial track + pre-stage fallback MP3 metadata cleanly without autoplay block
     if (currentTrackRef.current.localAudioUrl) {
       activeEngineRef.current = 'local';
       audioEl.src = currentTrackRef.current.localAudioUrl;
     } else if (currentTrackRef.current.youtubeId) {
       activeEngineRef.current = 'youtube';
+
+      if (currentTrackRef.current.previewUrl) {
+        audioEl.src = currentTrackRef.current.previewUrl;
+      }
     } else if (currentTrackRef.current.previewUrl) {
       activeEngineRef.current = 'preview';
       audioEl.src = currentTrackRef.current.previewUrl;
     }
 
     return () => {
+      isDisposed = true;
+
+      if (ytBootTimer) {
+        window.clearTimeout(ytBootTimer);
+      }
+
+      if (scriptElForCleanup) {
+        scriptElForCleanup.removeEventListener('error', markYtUnavailable);
+      }
+
+      audioEl.removeEventListener('ended', handleAudioEnded);
+      audioEl.removeEventListener('error', handleAudioError);
       audioEl.pause();
       audioEl.src = '';
 
@@ -1132,7 +1294,7 @@ export function VinylPlayer() {
         ytReadyRef.current = false;
       }
     };
-  }, []);
+  }, [cancelVolumeRamp, startDramaticVolumeSwell]);
 
   // Unified 60/120fps physics loop for vinyl rotation, inertia, and playback progress
   useEffect(() => {
@@ -1209,37 +1371,33 @@ export function VinylPlayer() {
   const unmuteOrStartCurrentTrack = useCallback(() => {
     hasUserGestureRef.current = true;
     justUnlockedAtRef.current = performance.now();
+    cancelVolumeRamp();
     setAudioUnlockNeeded(false);
+    isPlayingRef.current = true;
     setIsPlaying(true);
     playTactileAudio('needle');
 
-    if (activeEngineRef.current === 'youtube' && ytPlayerRef.current && ytReadyRef.current) {
-      const activeYtId = currentTrackRef.current.youtubeId;
-
-      if (activeYtId && failedYtIdsRef.current.has(activeYtId)) {
-        loadAndPlayTrack(currentTrackRef.current, true);
-
-        return;
-      }
+    if (activeEngineRef.current === 'youtube' && canUseYouTube(currentTrackRef.current)) {
+      primeAudioOnGesture();
 
       try {
-        const yt = ytPlayerRef.current;
+        const yt = ytPlayerRef.current!;
         const ytState = yt.getPlayerState();
         const targetVol = isMutedRef.current ? 0 : Math.round(volumeRef.current * 100);
 
-        if (!isMutedRef.current) {
+        if (isMutedRef.current) {
+          yt.mute();
+        } else {
           yt.unMute();
         }
 
-        if (ytState === 1 || ytState === 3) {
-          yt.setVolume(targetVol);
+        yt.setVolume(targetVol);
 
-          return;
+        if (ytState !== 1 && ytState !== 3) {
+          yt.playVideo();
         }
 
-        yt.setVolume(targetVol);
-        yt.playVideo();
-        scheduleYtCheckRef.current();
+        scheduleYouTubePlaybackCheck();
 
         return;
       } catch {
@@ -1256,16 +1414,22 @@ export function VinylPlayer() {
       }
 
       if (htmlAudioRef.current.src) {
-        htmlAudioRef.current.play().catch(() => {
-          loadAndPlayTrack(currentTrackRef.current, true);
-        });
+        htmlPrimedRef.current = true;
+        htmlAudioRef.current
+          .play()
+          .then(() => {
+            setAudioUnlockNeeded(false);
+          })
+          .catch(() => {
+            loadAndPlayTrack(currentTrackRef.current, true);
+          });
 
         return;
       }
     }
 
     loadAndPlayTrack(currentTrackRef.current, true);
-  }, [loadAndPlayTrack]);
+  }, [cancelVolumeRamp, canUseYouTube, loadAndPlayTrack, primeAudioOnGesture, scheduleYouTubePlaybackCheck]);
 
   // Play / Pause toggle
   const handleTogglePlay = useCallback(() => {
@@ -1273,12 +1437,35 @@ export function VinylPlayer() {
       return;
     }
 
+    hasUserGestureRef.current = true;
     cancelVolumeRamp();
     setAudioUnlockNeeded(false);
 
+    if (ytVerifyTimerRef.current) {
+      window.clearTimeout(ytVerifyTimerRef.current);
+      ytVerifyTimerRef.current = 0;
+    }
+
     const nextPlay = !isPlayingRef.current;
+    isPlayingRef.current = nextPlay;
     setIsPlaying(nextPlay);
     playTactileAudio('needle');
+
+    if (!nextPlay) {
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.pause();
+      }
+
+      if (ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch {
+          // Player already idle
+        }
+      }
+
+      return;
+    }
 
     if (currentTrackRef.current.localAudioUrl) {
       activeEngineRef.current = 'local';
@@ -1292,46 +1479,49 @@ export function VinylPlayer() {
           htmlAudioRef.current.currentTime = currentTimeRef.current;
         }
 
-        if (nextPlay) {
-          htmlAudioRef.current.play().catch(() => {});
-        } else {
-          htmlAudioRef.current.pause();
-        }
+        htmlPrimedRef.current = true;
+        htmlAudioRef.current
+          .play()
+          .then(() => {
+            setAudioUnlockNeeded(false);
+          })
+          .catch(() => {
+            if (!isMutedRef.current) {
+              setAudioUnlockNeeded(true);
+            }
+          });
       }
 
       return;
     }
 
-    if (activeEngineRef.current === 'preview' && htmlAudioRef.current) {
-      htmlAudioRef.current.muted = isMutedRef.current;
-      htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
-
-      if (nextPlay) {
-        htmlAudioRef.current.play().catch(() => {});
-      } else {
-        htmlAudioRef.current.pause();
-      }
+    if (activeEngineRef.current === 'preview') {
+      htmlPrimedRef.current = true;
+      switchToPreviewFallback(currentTrackRef.current, true, false);
 
       return;
     }
 
-    if (currentTrackRef.current.youtubeId) {
+    if (canUseYouTube(currentTrackRef.current)) {
+      primeAudioOnGesture();
       activeEngineRef.current = 'youtube';
 
-      if (ytPlayerRef.current && ytReadyRef.current) {
-        if (nextPlay) {
-          if (!isMutedRef.current) {
-            ytPlayerRef.current.unMute();
-          }
-
-          ytPlayerRef.current.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
-          ytPlayerRef.current.playVideo();
-        } else {
-          ytPlayerRef.current.pauseVideo();
-        }
+      if (isMutedRef.current) {
+        ytPlayerRef.current!.mute();
+      } else {
+        ytPlayerRef.current!.unMute();
       }
+
+      ytPlayerRef.current!.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
+      ytPlayerRef.current!.playVideo();
+      scheduleYouTubePlaybackCheck();
+
+      return;
     }
-  }, [cancelVolumeRamp]);
+
+    htmlPrimedRef.current = true;
+    switchToPreviewFallback(currentTrackRef.current, true, false);
+  }, [cancelVolumeRamp, canUseYouTube, primeAudioOnGesture, scheduleYouTubePlaybackCheck, switchToPreviewFallback]);
 
   // Resume blocked scroll autoplay instantaneously on next user interaction anywhere
   useEffect(() => {
@@ -1364,18 +1554,27 @@ export function VinylPlayer() {
   const handleSelectSide = (sideIdx: number) => {
     if (sideIdx === activeSideIdx) return;
 
+    hasUserGestureRef.current = true;
     cancelVolumeRamp();
     setAudioUnlockNeeded(false);
 
     const nextSide = SPOTIFY_PLAYLISTS[sideIdx];
     const startIdx = findDefaultTrackIndex(nextSide.tracks, sideIdx);
     const safeIdx = nextSide.tracks[startIdx] ? startIdx : 0;
+    const picked = nextSide.tracks[safeIdx];
 
+    if (canUseYouTube(picked)) {
+      primeAudioOnGesture();
+    } else {
+      htmlPrimedRef.current = true;
+    }
+
+    isPlayingRef.current = true;
     setActiveSideIdx(sideIdx);
     setActiveTrackIdx(safeIdx);
     setIsPlaying(true);
     playTactileAudio('needle');
-    loadAndPlayTrack(nextSide.tracks[safeIdx], true);
+    loadAndPlayTrack(picked, true);
   };
 
   // Pick any specific song from playlist queue
@@ -1384,8 +1583,17 @@ export function VinylPlayer() {
 
     if (!picked) return;
 
+    hasUserGestureRef.current = true;
     cancelVolumeRamp();
     setAudioUnlockNeeded(false);
+
+    if (canUseYouTube(picked)) {
+      primeAudioOnGesture();
+    } else {
+      htmlPrimedRef.current = true;
+    }
+
+    isPlayingRef.current = true;
     setActiveTrackIdx(trackIdx);
     setIsPlaying(true);
     playTactileAudio('needle');
@@ -1485,6 +1693,7 @@ export function VinylPlayer() {
     setIsMuted(nextVol === 0);
 
     if (htmlAudioRef.current) {
+      htmlAudioRef.current.muted = nextVol === 0;
       htmlAudioRef.current.volume = nextVol;
     }
 
@@ -1502,6 +1711,7 @@ export function VinylPlayer() {
     setIsMuted(nextMuted);
 
     if (htmlAudioRef.current) {
+      htmlAudioRef.current.muted = nextMuted;
       htmlAudioRef.current.volume = nextMuted ? 0 : volume;
     }
 
@@ -1538,9 +1748,9 @@ export function VinylPlayer() {
         />
       )}
 
-      {/* Hidden YouTube IFrame container kept minimally sized and transparent so browsers allow background playback */}
+      {/* Hidden YouTube IFrame container kept minimally sized and nearly transparent so browsers allow background playback */}
       <div
-        className="fixed bottom-0 right-0 w-[200px] h-[200px] opacity-0 pointer-events-none overflow-hidden -z-50"
+        className="fixed bottom-0 right-0 w-[200px] h-[200px] opacity-[0.002] pointer-events-none overflow-hidden -z-10"
         aria-hidden="true"
       >
         <div ref={ytContainerRef} />

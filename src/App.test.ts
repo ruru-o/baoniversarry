@@ -47,5 +47,11 @@ describe('Anniversary Experience Verification', () => {
     expect(SPOTIFY_PLAYLISTS[1].trackTitle).toBe('beside you');
     expect(SPOTIFY_PLAYLISTS[0].embedUrl).toContain('spotify.com/embed');
     expect(SPOTIFY_PLAYLISTS[1].embedUrl).toContain('spotify.com/embed');
+
+    for (const side of SPOTIFY_PLAYLISTS) {
+      for (const track of side.tracks) {
+        expect(Boolean(track.previewUrl || track.localAudioUrl)).toBe(true);
+      }
+    }
   });
 });

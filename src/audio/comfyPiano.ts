@@ -140,6 +140,8 @@ class ComfyPianoEngine {
   private status: PianoStatus = 'waiting';
   private userMuted = false;
   private currentDuck = 1;
+  private lastWokeAt = 0;
+  private pendingStart: Promise<boolean> | null = null;
   private listeners = new Set<(status: PianoStatus) => void>();
 
   subscribe(listener: (status: PianoStatus) => void): () => void {
@@ -343,41 +345,56 @@ class ComfyPianoEngine {
   async startOrResume(userInitiated = false): Promise<boolean> {
     if (this.getStatus() === 'stopped') return false;
 
-    const ctx = this.ensureAudioGraph();
+    if (this.pendingStart) {
+      return this.pendingStart;
+    }
 
-    if (!ctx || !this.masterGain) return false;
+    const run = async (): Promise<boolean> => {
+      const ctx = this.ensureAudioGraph();
 
-    if (ctx.state === 'suspended') {
-      try {
-        await ctx.resume();
-      } catch {
+      if (!ctx || !this.masterGain) return false;
+
+      if (ctx.state === 'suspended') {
         if (!userInitiated) {
           this.setStatus('waiting');
+
+          return false;
         }
+
+        try {
+          await ctx.resume();
+          this.lastWokeAt = performance.now();
+        } catch {
+          return false;
+        }
+      }
+
+      if (ctx.state !== 'running') {
+        this.setStatus('waiting');
 
         return false;
       }
-    }
 
-    if (ctx.state !== 'running') {
-      this.setStatus('waiting');
+      if (this.getStatus() === 'stopped') return false;
 
-      return false;
-    }
+      this.beginNoteLoop();
 
-    if (this.getStatus() === 'stopped') return false;
+      if (!this.userMuted) {
+        const now = ctx.currentTime;
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(Math.max(0.0001, this.masterGain.gain.value), now);
+        this.masterGain.gain.linearRampToValueAtTime(TARGET_MASTER_GAIN, now + 1.6);
+        this.setStatus('playing');
+      }
 
-    this.beginNoteLoop();
+      return true;
+    };
 
-    if (!this.userMuted) {
-      const now = ctx.currentTime;
-      this.masterGain.gain.cancelScheduledValues(now);
-      this.masterGain.gain.setValueAtTime(Math.max(0.0001, this.masterGain.gain.value), now);
-      this.masterGain.gain.linearRampToValueAtTime(TARGET_MASTER_GAIN, now + 1.6);
-      this.setStatus('playing');
-    }
+    this.pendingStart = run().finally(() => {
+      this.pendingStart = null;
+    });
 
-    return true;
+    return this.pendingStart;
   }
 
   /** Smoothly attenuates the felt piano as the soundtrack headline begins entering view. */
@@ -431,6 +448,10 @@ class ComfyPianoEngine {
       this.userMuted = false;
       await this.startOrResume(true);
 
+      return;
+    }
+
+    if (performance.now() - this.lastWokeAt < 450 && !this.userMuted) {
       return;
     }
 

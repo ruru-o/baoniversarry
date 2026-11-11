@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Music2, Volume2, VolumeX } from 'lucide-react';
 import { comfyPiano, type PianoStatus } from '../audio/comfyPiano';
@@ -9,6 +9,7 @@ import { comfyPiano, type PianoStatus } from '../audio/comfyPiano';
  */
 export function AmbientPianoControl() {
   const [status, setStatus] = useState<PianoStatus>(() => comfyPiano.getStatus());
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -28,7 +29,11 @@ export function AmbientPianoControl() {
     // Attempt immediate ambient playback on page load
     void comfyPiano.startOrResume(false);
 
-    const wakeOnFirstGesture = () => {
+    const wakeOnFirstGesture = (e: Event) => {
+      if (buttonRef.current && e.target instanceof Node && buttonRef.current.contains(e.target)) {
+        return;
+      }
+
       if (comfyPiano.getStatus() === 'waiting') {
         void comfyPiano.startOrResume(true);
       }
@@ -60,6 +65,7 @@ export function AmbientPianoControl() {
     <AnimatePresence>
       {isVisible && (
         <motion.button
+          ref={buttonRef}
           key="ambient-piano-toggle"
           type="button"
           initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 12, scale: 0.94 }}
