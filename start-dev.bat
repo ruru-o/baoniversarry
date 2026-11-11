@@ -29,7 +29,7 @@ if %ERRORLEVEL% equ 0 (
 )
 
 echo [2/2] Launching live Vite server with %PKG_MGR%...
-echo Live URL: http://localhost:5173/
+echo Live URL: http://localhost:3000/
 echo (The web application will open automatically in your browser)
 echo.
 echo Press Ctrl+C in this window anytime to stop the server.
@@ -37,9 +37,9 @@ echo ===================================================================
 echo.
 
 if "%PKG_MGR%"=="pnpm" (
-    call pnpm dev --open --host 0.0.0.0 --port 5173
+    call pnpm dev --open --host 0.0.0.0 --port 3000
 ) else (
-    call npm run dev -- --open --host 0.0.0.0 --port 5173
+    call npm run dev -- --open --host 0.0.0.0 --port 3000
 )
 
 if %ERRORLEVEL% neq 0 (

@@ -1,3 +1,8 @@
+import { WAM_TRACKS, BAO_TRACKS, type PlaylistTrack } from './playlists';
+import { assetUrl } from '../utils/assetUrl';
+
+export type { PlaylistTrack };
+
 export interface PhotoItem {
   id: string;
   source: 'main' | 'sub' | 'pets';
@@ -12,7 +17,7 @@ export interface PhotoItem {
   constellationLines: Array<[number, number]>; // pairs of star indices to connect
 }
 
-export const ALL_PHOTOS: PhotoItem[] = [
+const RAW_PHOTOS: PhotoItem[] = [
   // ─── Main Portraits & Moments ──────────────────────────────────
   {
     id: 'main-hoodie-mirror',
@@ -39,19 +44,6 @@ export const ALL_PHOTOS: PhotoItem[] = [
     constellationPhrase: "I'm glad I met you.",
     constellationStars: [[30, 20], [50, 40], [70, 20], [85, 50], [50, 90], [15, 50]],
     constellationLines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]],
-  },
-  {
-    id: 'main-laughing',
-    source: 'main',
-    filename: 'IMG_6095.jpg',
-    fullUrl: '/photos/main/IMG_6095.webp',
-    thumbUrl: '/photos/main/IMG_6095_thumb.webp',
-    width: 4032,
-    height: 3024,
-    aspectRatio: 1.333,
-    constellationPhrase: "This was a good day.",
-    constellationStars: [[25, 40], [50, 25], [75, 40], [65, 75], [35, 75]],
-    constellationLines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]],
   },
   {
     id: 'main-lockscreens',
@@ -116,7 +108,7 @@ export const ALL_PHOTOS: PhotoItem[] = [
     width: 4032,
     height: 3024,
     aspectRatio: 1.333,
-    constellationPhrase: "You make ordinary days better.",
+    constellationPhrase: "The peepo with a beepo brain.",
     constellationStars: [[25, 30], [50, 20], [75, 45], [60, 80], [35, 70]],
     constellationLines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]],
   },
@@ -194,7 +186,7 @@ export const ALL_PHOTOS: PhotoItem[] = [
     width: 2160,
     height: 2741,
     aspectRatio: 0.788,
-    constellationPhrase: "Never serious.",
+    constellationPhrase: "Always with you.",
     constellationStars: [[20, 40], [50, 20], [80, 40], [65, 80], [35, 80]],
     constellationLines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]],
   },
@@ -220,7 +212,7 @@ export const ALL_PHOTOS: PhotoItem[] = [
     width: 1280,
     height: 960,
     aspectRatio: 1.333,
-    constellationPhrase: "I want more moments like this.",
+    constellationPhrase: "1964 cafe was one of the first wamming day we had, and honestly, would like to revisit again.",
     constellationStars: [[20, 30], [50, 20], [80, 30], [70, 75], [30, 75]],
     constellationLines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0]],
   },
@@ -287,21 +279,47 @@ export const ALL_PHOTOS: PhotoItem[] = [
     width: 3024,
     height: 4032,
     aspectRatio: 0.75,
-    constellationPhrase: "Quiet companion.",
+    constellationPhrase: "The Ploo.",
     constellationStars: [[25, 25], [75, 25], [75, 75], [25, 75]],
     constellationLines: [[0, 1], [1, 2], [2, 3], [3, 0]],
   },
 ];
 
-export const SPOTIFY_PLAYLISTS = [
+export const ALL_PHOTOS: PhotoItem[] = RAW_PHOTOS.map((photo) => ({
+  ...photo,
+  fullUrl: assetUrl(photo.fullUrl),
+  thumbUrl: assetUrl(photo.thumbUrl),
+}));
+
+export interface PlaylistSide {
+  id: string;
+  name: string;
+  title: string;
+  subtitle: string;
+  coverUrl: string;
+  externalUrl: string;
+  embedUrl: string;
+  audioUrl: string;
+  trackTitle: string;
+  trackArtist: string;
+  duration: number;
+  tracks: PlaylistTrack[];
+}
+
+const RAW_SPOTIFY_PLAYLISTS: PlaylistSide[] = [
   {
     id: '049ExphVBIdjni1fmkxBEt',
     name: 'Wam',
     title: '‧₊˚🩵💙🎐💎  ‧₊𓏲 ๋࣭ ࣪ ˖',
-    subtitle: 'BLUE',
+    subtitle: 'I Choose You',
     coverUrl: '/photos/spotify/playlist_blue.jpg',
     externalUrl: 'https://open.spotify.com/playlist/049ExphVBIdjni1fmkxBEt?si=561c91f102504b2c',
     embedUrl: 'https://open.spotify.com/embed/playlist/049ExphVBIdjni1fmkxBEt?utm_source=generator&theme=0',
+    audioUrl: 'https://p.scdn.co/mp3-preview/b27c2b7844d8d1e5db9f176388bb825d754ee408',
+    trackTitle: 'I Choose You',
+    trackArtist: 'keshi',
+    duration: 168,
+    tracks: WAM_TRACKS,
   },
   {
     id: '5k0G8TEnK1gCv3KTID48oE',
@@ -311,5 +329,16 @@ export const SPOTIFY_PLAYLISTS = [
     coverUrl: '/photos/spotify/playlist_cloud.jpg',
     externalUrl: 'https://open.spotify.com/playlist/5k0G8TEnK1gCv3KTID48oE?si=ab86dcd540014272',
     embedUrl: 'https://open.spotify.com/embed/playlist/5k0G8TEnK1gCv3KTID48oE?utm_source=generator&theme=0',
+    audioUrl: '/audio/bao-beside-you.mp3',
+    trackTitle: 'beside you',
+    trackArtist: 'keshi',
+    duration: 166,
+    tracks: BAO_TRACKS,
   },
 ];
+
+export const SPOTIFY_PLAYLISTS: PlaylistSide[] = RAW_SPOTIFY_PLAYLISTS.map((side) => ({
+  ...side,
+  coverUrl: assetUrl(side.coverUrl),
+  audioUrl: assetUrl(side.audioUrl),
+}));
