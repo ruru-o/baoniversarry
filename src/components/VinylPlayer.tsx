@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import { SPOTIFY_PLAYLISTS, type PlaylistSide, type PlaylistTrack } from '../data/photos';
 import { comfyPiano } from '../audio/comfyPiano';
-import { ScrollLitSentence } from './ScrollStorySequence';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -366,7 +365,7 @@ function VinylGlassWindow({ children }: { children: ReactNode }) {
     <div
       ref={winRef}
       data-testid="vinyl-window"
-      className="vinyl-glass-pane rounded-3xl p-4 sm:p-8 lg:p-10 relative overflow-clip"
+      className="vinyl-glass-pane rounded-3xl p-4 sm:p-8 lg:p-8 relative overflow-clip"
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
@@ -469,6 +468,7 @@ interface YTPlayerInstance {
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   setVolume: (volume: number) => void;
+  getVolume?: () => number;
   mute: () => void;
   unMute: () => void;
   isMuted?: () => boolean;
@@ -575,6 +575,7 @@ const DEFAULT_WAM_TRACK_ID = '41EnM4giX9PJYZIBUCPmiI';
 const DEFAULT_BAO_TRACK_TITLE = 'beside you';
 const YT_PRIMARY_HOST = 'https://www.youtube-nocookie.com';
 const YT_FALLBACK_HOST = 'https://www.youtube.com';
+const ACTIVATION_EVENTS = ['click', 'pointerup', 'touchend', 'keydown'] as const;
 
 function findDefaultTrackIndex(tracks: PlaylistTrack[], sideIdx: number): number {
   const matched =
@@ -629,11 +630,11 @@ export function VinylPlayer() {
 
       const stickyRect = stickyEl.getBoundingClientRect();
       const blockRect = blockEl.getBoundingClientRect();
-      const headingRect = headingEl.getBoundingClientRect();
+      const headingHeight = headingEl.offsetHeight;
 
-      if (headingRect.height <= 0) return;
+      if (headingHeight <= 0) return;
 
-      const restCenterYInSticky = blockRect.top - stickyRect.top + headingRect.height / 2;
+      const restCenterYInSticky = blockRect.top - stickyRect.top + headingHeight / 2;
       const targetCenterY = window.innerHeight * 0.5;
       const nextOffset = Math.max(0, Math.round(targetCenterY - restCenterYInSticky));
 
@@ -662,7 +663,7 @@ export function VinylPlayer() {
 
   const { scrollYProgress: morphProgress } = useScroll({
     target: stageRef,
-    offset: ['start 0.22', 'end end'],
+    offset: ['start 0.16', 'end end'],
   });
 
   const { scrollYProgress: introHandoffProgress } = useScroll({
@@ -670,23 +671,32 @@ export function VinylPlayer() {
     offset: ['start 0.88', 'start 0.12'],
   });
 
-  const titleOpacity = useTransform(morphProgress, [0, 0.08, 1], [0, 1, 1]);
+  const titleOpacity = useTransform(morphProgress, [0, 0.12, 1], [0, 1, 1]);
 
   const titleY = useTransform(
     morphProgress,
-    [0, 0.1, 0.6, 0.86, 1],
-    [introOffsetPx + 18, introOffsetPx, introOffsetPx, 0, 0]
+    [0, 0.12, 0.18, 0.56, 1],
+    [introOffsetPx + 20, introOffsetPx, introOffsetPx, 0, 0]
   );
 
-  const titleScale = useTransform(morphProgress, [0, 0.1, 0.6, 0.86, 1], [0.985, 1, 1, 1, 1]);
+  const titleScale = useTransform(
+    morphProgress,
+    [0, 0.14, 0.22, 0.56, 1],
+    [0.95, 1.03, 1.03, 1, 1]
+  );
 
-  const categoryOpacity = useTransform(morphProgress, [0.62, 0.82], [0, 1]);
-  const categoryY = useTransform(morphProgress, [0.62, 0.82], [28, 0]);
-  const categoryScale = useTransform(morphProgress, [0.62, 0.82], [0.97, 1]);
+  const haloOpacity = useTransform(morphProgress, [0.02, 0.16, 0.36, 0.52], [0, 0.32, 0.18, 0]);
+  const haloScale = useTransform(morphProgress, [0.02, 0.52], [0.68, 1.38]);
+  const haloRotate = useTransform(morphProgress, [0.02, 0.52], [-16, 22]);
 
-  const deckOpacity = useTransform(morphProgress, [0.68, 0.88], [0, 1]);
-  const deckY = useTransform(morphProgress, [0.68, 0.88], [38, 0]);
-  const deckScale = useTransform(morphProgress, [0.68, 0.88], [0.97, 1]);
+  const categoryOpacity = useTransform(morphProgress, [0.56, 0.84], [0, 1]);
+  const categoryY = useTransform(morphProgress, [0.56, 0.84], [16, 0]);
+  const categoryScale = useTransform(morphProgress, [0.56, 0.84], [0.97, 1]);
+
+  const deckOpacity = useTransform(morphProgress, [0.44, 0.78], [0, 1]);
+  const deckY = useTransform(morphProgress, [0.44, 0.8], [64, 0]);
+  const deckScale = useTransform(morphProgress, [0.44, 0.8], [0.91, 1]);
+  const discIntroRotate = useTransform(morphProgress, [0.44, 0.86], [-32, 0]);
 
   const currentSide: PlaylistSide = SPOTIFY_PLAYLISTS[activeSideIdx] || SPOTIFY_PLAYLISTS[0];
   const tracks: PlaylistTrack[] = currentSide.tracks;
@@ -703,6 +713,8 @@ export function VinylPlayer() {
   const lastScrubAudioAtRef = useRef<number>(0);
   const lastYtSeekAtRef = useRef<number>(0);
   const seekBarRef = useRef<HTMLDivElement>(null);
+  const isScrubbingSeekRef = useRef<boolean>(false);
+  const lastSeekPointerUpAtRef = useRef<number>(0);
 
   // Scroll autoplay & dramatic reveal lifecycle refs
   const hasUserGestureRef = useRef<boolean>(false);
@@ -714,6 +726,7 @@ export function VinylPlayer() {
   const ytVerifyTimerRef = useRef<number>(0);
   const scheduleYtCheckRef = useRef<() => void>(() => {});
   const switchToPreviewFallbackRef = useRef<(track: PlaylistTrack, shouldPlay: boolean, swellVolume?: boolean) => void>(() => {});
+  const unmuteOrStartRef = useRef<() => void>(() => {});
 
   // Audio engines: Hidden YouTube IFrame + Local/Preview HTML5 Audio element
   const ytContainerRef = useRef<HTMLDivElement>(null);
@@ -821,24 +834,16 @@ export function VinylPlayer() {
     }
   }, []);
 
-  // Smooth 1.65s crescendo fade-in (0 -> target volume) so autoplayed music blooms in gently
+  // Gentle 850ms swell from audible floor (28%) -> target volume, with guaranteed final volume clamp
   const startDramaticVolumeSwell = useCallback(() => {
     cancelVolumeRamp();
 
-    const durationMs = 1650;
-    const startAt = performance.now();
+    const durationMs = 850;
+    let rampStartAt = 0;
 
-    const step = (now: number) => {
-      if (!isPlayingRef.current) {
-        volumeRampRafRef.current = 0;
-
-        return;
-      }
-
-      const t = Math.min(1, (now - startAt) / durationMs);
-      const eased = 1 - Math.pow(1 - t, 3);
+    const applyVol = (ratio: number) => {
       const targetVol = isMutedRef.current ? 0 : volumeRef.current;
-      const nextVol = targetVol * eased;
+      const nextVol = targetVol * ratio;
 
       if (activeEngineRef.current !== 'youtube' && htmlAudioRef.current) {
         htmlAudioRef.current.volume = nextVol;
@@ -851,19 +856,52 @@ export function VinylPlayer() {
           // Player initializing
         }
       }
+    };
+
+    const step = (now: number) => {
+      if (!isPlayingRef.current) {
+        volumeRampRafRef.current = 0;
+
+        return;
+      }
+
+      // Wait until YouTube enters PLAYING state so slow buffering never exhausts the ramp at low/zero volume
+      if (activeEngineRef.current === 'youtube' && ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          if (ytPlayerRef.current.getPlayerState?.() !== 1) {
+            applyVol(1);
+            volumeRampRafRef.current = requestAnimationFrame(step);
+
+            return;
+          }
+        } catch {
+          // Keep target volume guarded
+        }
+      }
+
+      if (rampStartAt === 0) {
+        rampStartAt = now;
+      }
+
+      const t = Math.min(1, (now - rampStartAt) / durationMs);
+      const eased = 0.28 + 0.72 * (1 - Math.pow(1 - t, 3));
+
+      applyVol(eased);
 
       if (t < 1) {
         volumeRampRafRef.current = requestAnimationFrame(step);
       } else {
+        applyVol(1);
         volumeRampRafRef.current = 0;
       }
     };
 
+    applyVol(activeEngineRef.current === 'youtube' ? 1 : 0.28);
     volumeRampRafRef.current = requestAnimationFrame(step);
   }, [cancelVolumeRamp]);
 
-  // Seek current active audio engine smoothly
-  const seekAudioEngine = useCallback((targetSeconds: number) => {
+  // Seek current active audio engine smoothly (and ensure unmuted playback if user interacted while stalled)
+  const seekAudioEngine = useCallback((targetSeconds: number, resumeIfStalled = false) => {
     const clamped = Math.max(0, Math.min(trackDurationRef.current || 1, targetSeconds));
     currentTimeRef.current = clamped;
     setCurrentTime(clamped);
@@ -874,11 +912,40 @@ export function VinylPlayer() {
       if (now - lastYtSeekAtRef.current > 160 || !isDraggingRef.current) {
         lastYtSeekAtRef.current = now;
         ytPlayerRef.current.seekTo(clamped, true);
+
+        if (resumeIfStalled && isPlayingRef.current) {
+          try {
+            if (!isMutedRef.current) {
+              ytPlayerRef.current.unMute();
+              ytPlayerRef.current.setVolume(Math.round(volumeRef.current * 100));
+              setAudioUnlockNeeded(false);
+            }
+
+            const st = ytPlayerRef.current.getPlayerState?.();
+
+            if (st !== 1 && st !== 3) {
+              ytPlayerRef.current.playVideo();
+            }
+          } catch {
+            // Ignored
+          }
+        }
       }
     } else if (htmlAudioRef.current) {
       if (Number.isFinite(htmlAudioRef.current.duration) && htmlAudioRef.current.duration > 0) {
         const previewClamped = Math.min(clamped, htmlAudioRef.current.duration - 0.1);
         htmlAudioRef.current.currentTime = Math.max(0, previewClamped);
+      }
+
+      if (resumeIfStalled && isPlayingRef.current) {
+        htmlAudioRef.current.muted = isMutedRef.current;
+        htmlAudioRef.current.volume = isMutedRef.current ? 0 : volumeRef.current;
+
+        if (htmlAudioRef.current.paused) {
+          void htmlAudioRef.current.play().then(() => {
+            setAudioUnlockNeeded(false);
+          }).catch(() => {});
+        }
       }
     }
   }, []);
@@ -919,7 +986,7 @@ export function VinylPlayer() {
       }
 
       const targetVol = isMutedRef.current ? 0 : volumeRef.current;
-      audioEl.volume = swellVolume ? 0 : targetVol;
+      audioEl.volume = swellVolume ? Math.max(0.28 * targetVol, 0.05) : targetVol;
 
       if (swellVolume && !isMutedRef.current) {
         startDramaticVolumeSwell();
@@ -958,7 +1025,7 @@ export function VinylPlayer() {
 
     const expectedTrackId = currentTrackRef.current.id;
     const expectedYtId = currentTrackRef.current.youtubeId;
-    const retryDelays = [1600, 1600, 1800];
+    const retryDelays = [450, 950, 1500, 2100];
 
     const inspectPlayback = (attempt: number) => {
       if (
@@ -986,7 +1053,7 @@ export function VinylPlayer() {
           failedYtIdsRef.current.add(activeTrack.youtubeId);
         }
 
-        switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
+        switchToPreviewFallback(activeTrack, true, true);
 
         return;
       }
@@ -994,12 +1061,35 @@ export function VinylPlayer() {
       try {
         const ytState = yt.getPlayerState?.();
         const ytMuted = yt.isMuted?.() ?? false;
+        const ytVol = yt.getVolume?.() ?? 0;
         const ytTime = yt.getCurrentTime?.() ?? 0;
+        const hasActivation = hasUserGestureRef.current || Boolean(navigator.userActivation?.hasBeenActive);
 
         // 1 = PLAYING
         if (ytState === 1) {
-          if (ytMuted && !isMutedRef.current) {
-            setAudioUnlockNeeded(true);
+          if (!isMutedRef.current) {
+            if (ytVol < 5 && volumeRampRafRef.current === 0) {
+              yt.setVolume(Math.round(volumeRef.current * 100));
+            }
+
+            if (ytMuted) {
+              if (hasActivation) {
+                try {
+                  yt.unMute();
+                  yt.setVolume(Math.round(volumeRef.current * 100));
+                } catch {
+                  // Will keep unlock hint visible below if still muted
+                }
+              }
+
+              if (yt.isMuted?.() ?? true) {
+                setAudioUnlockNeeded(true);
+              } else {
+                setAudioUnlockNeeded(false);
+              }
+            } else {
+              setAudioUnlockNeeded(false);
+            }
           } else {
             setAudioUnlockNeeded(false);
           }
@@ -1008,15 +1098,43 @@ export function VinylPlayer() {
             return;
           }
 
-          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(attempt + 1), 1000);
+          ytVerifyTimerRef.current = window.setTimeout(() => inspectPlayback(attempt + 1), 900);
 
           return;
         }
 
-        // Unstarted (-1), buffering (3), or cued (5) -> nudge play and grant full cold-start window before failing
-        if ((ytState === -1 || ytState === 3 || ytState === 5) && attempt < retryDelays.length) {
-          if (ytState === -1 || ytState === 5) {
+        // If browser blocked unmuted cold autoplay, start muted visual spin cleanly and show one-tap unlock
+        if ((ytState === -1 || ytState === 5 || ytState === 2) && !hasActivation && !ytMuted && attempt >= 1) {
+          try {
+            yt.mute();
+            yt.playVideo();
+          } catch {
+            // Ignored
+          }
+
+          if (!isMutedRef.current) {
+            setAudioUnlockNeeded(true);
+          }
+
+          if (attempt < retryDelays.length) {
+            ytVerifyTimerRef.current = window.setTimeout(
+              () => inspectPlayback(attempt + 1),
+              retryDelays[attempt]
+            );
+          }
+
+          return;
+        }
+
+        // Unstarted (-1), buffering (3), cued (5), or paused (2) -> nudge play and grant full cold-start window before failing
+        if ((ytState === -1 || ytState === 3 || ytState === 5 || ytState === 2) && attempt < retryDelays.length) {
+          if (ytState !== 3) {
             try {
+              if (!isMutedRef.current && hasActivation && ytMuted) {
+                yt.unMute();
+                yt.setVolume(Math.round(volumeRef.current * 100));
+              }
+
               yt.playVideo();
             } catch {
               // Ignore transient player lock
@@ -1044,8 +1162,8 @@ export function VinylPlayer() {
         }
 
         if (activeTrack.previewUrl || activeTrack.localAudioUrl) {
-          switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
-        } else if (!hasUserGestureRef.current) {
+          switchToPreviewFallback(activeTrack, true, hasActivation);
+        } else if (!hasActivation) {
           yt.mute();
           yt.playVideo();
           setAudioUnlockNeeded(true);
@@ -1123,14 +1241,15 @@ export function VinylPlayer() {
       const yt = ytPlayerRef.current!;
 
       if (shouldPlay) {
-        if (hasUserGestureRef.current && !isMutedRef.current) {
-          yt.unMute();
-        } else {
+        if (isMutedRef.current) {
           yt.mute();
+          yt.setVolume(0);
+        } else {
+          yt.unMute();
+          yt.setVolume(Math.round(volumeRef.current * 100));
         }
 
         yt.loadVideoById(track.youtubeId, 0);
-        yt.setVolume(isMutedRef.current ? 0 : Math.round(volumeRef.current * 100));
         yt.playVideo();
         scheduleYouTubePlaybackCheck();
       } else {
@@ -1177,12 +1296,12 @@ export function VinylPlayer() {
 
     setIsPlaying(true);
 
-    if (hasUserGestureRef.current) {
+    if (hasUserGestureRef.current || navigator.userActivation?.hasBeenActive) {
       playTactileAudio('needle');
     }
 
     if (activeTrack.localAudioUrl) {
-      switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
+      switchToPreviewFallback(activeTrack, true, true);
 
       return;
     }
@@ -1192,21 +1311,19 @@ export function VinylPlayer() {
 
       if (ytPlayerRef.current && ytReadyRef.current) {
         try {
-          if (hasUserGestureRef.current && !isMutedRef.current) {
-            ytPlayerRef.current.unMute();
-            ytPlayerRef.current.setVolume(0);
-            startDramaticVolumeSwell();
-          } else {
+          if (isMutedRef.current) {
             ytPlayerRef.current.mute();
-
-            if (!isMutedRef.current) {
-              setAudioUnlockNeeded(true);
-            }
+            ytPlayerRef.current.setVolume(0);
+          } else {
+            // Try unmuted immediately so permitted autoplay / prior engagement plays loudly with no slider adjustment
+            ytPlayerRef.current.unMute();
+            ytPlayerRef.current.setVolume(Math.round(volumeRef.current * 100));
+            startDramaticVolumeSwell();
           }
 
           ytPlayerRef.current.playVideo();
         } catch {
-          // Verified by timer below
+          // Verified immediately by playback check below
         }
       }
 
@@ -1217,18 +1334,18 @@ export function VinylPlayer() {
 
     if (activeTrack.previewUrl) {
       cancelVolumeRamp();
-      switchToPreviewFallback(activeTrack, true, hasUserGestureRef.current);
+      switchToPreviewFallback(activeTrack, true, true);
     }
   }, [cancelVolumeRamp, scheduleYouTubePlaybackCheck, startDramaticVolumeSwell, switchToPreviewFallback]);
 
-  // Trigger dramatic autoplay when scrolling into the turntable reveal stage
+  // Trigger dramatic autoplay right as the turntable opens into view
   useMotionValueEvent(morphProgress, 'change', (latest) => {
-    if (!prefersReducedMotion && latest >= 0.7) {
+    if (!prefersReducedMotion && latest >= 0.44) {
       triggerDramaticAutoplay();
     }
   });
 
-  // Gradually duck & seamlessly stop the background piano when "Songs that we listen all throughout the years" is introduced
+  // Gradually duck & seamlessly stop the background piano when "Songs that we've listened all throughout the years" arrives
   useMotionValueEvent(introHandoffProgress, 'change', (latest) => {
     if (latest > 0 && latest < 0.42) {
       const duck = 0.5 * (1 + Math.cos(Math.PI * Math.min(1, latest / 0.65)));
@@ -1240,8 +1357,12 @@ export function VinylPlayer() {
     }
   });
 
-  // Track real user activation, handle navbar jump trigger, and catch initial already-scrolled viewport
+  // Track real Chromium user activations (ignoring touch-scroll pointerdown), handle navbar jump, and catch restored scroll
   useEffect(() => {
+    if (navigator.userActivation?.hasBeenActive) {
+      hasUserGestureRef.current = true;
+    }
+
     const markGesture = () => {
       primeAudioOnGesture();
     };
@@ -1249,18 +1370,27 @@ export function VinylPlayer() {
     const handleNavPlay = () => {
       primeAudioOnGesture();
       comfyPiano.fadeOutAndStop(1.35);
+
+      if (audioUnlockNeededRef.current && !isMutedRef.current) {
+        unmuteOrStartRef.current();
+
+        return;
+      }
+
       triggerDramaticAutoplay();
     };
 
-    window.addEventListener('pointerdown', markGesture, { capture: true, passive: true });
-    window.addEventListener('keydown', markGesture, { capture: true, passive: true });
+    ACTIVATION_EVENTS.forEach((evt) => {
+      window.addEventListener(evt, markGesture, { capture: true, passive: true });
+    });
+
     window.addEventListener('anniv:play-soundtrack', handleNavPlay);
 
     if (introHandoffProgress.get() >= 0.42) {
       comfyPiano.fadeOutAndStop(0.6);
     }
 
-    if (!prefersReducedMotion && morphProgress.get() >= 0.7) {
+    if (!prefersReducedMotion && morphProgress.get() >= 0.44) {
       triggerDramaticAutoplay();
     }
 
@@ -1281,8 +1411,9 @@ export function VinylPlayer() {
     }
 
     return () => {
-      window.removeEventListener('pointerdown', markGesture, { capture: true });
-      window.removeEventListener('keydown', markGesture, { capture: true });
+      ACTIVATION_EVENTS.forEach((evt) => {
+        window.removeEventListener(evt, markGesture, { capture: true });
+      });
       window.removeEventListener('anniv:play-soundtrack', handleNavPlay);
 
       if (observer) {
@@ -1418,7 +1549,7 @@ export function VinylPlayer() {
         height: '200',
         width: '200',
         host: hostUrl,
-        videoId: initialVideoId || 'boMFsedHSBg',
+        videoId: initialVideoId || 'BLYMjHAa0sE',
         playerVars: {
           autoplay: 0,
           controls: 0,
@@ -1458,16 +1589,13 @@ export function VinylPlayer() {
 
               activeEngineRef.current = 'youtube';
 
-              if (hasUserGestureRef.current && !isMutedRef.current) {
-                ev.target.unMute();
-                ev.target.setVolume(0);
-                startDramaticVolumeSwell();
-              } else {
+              if (isMutedRef.current) {
                 ev.target.mute();
-
-                if (!isMutedRef.current) {
-                  setAudioUnlockNeeded(true);
-                }
+                ev.target.setVolume(0);
+              } else {
+                ev.target.unMute();
+                ev.target.setVolume(Math.round(volumeRef.current * 100));
+                startDramaticVolumeSwell();
               }
 
               const startAt = currentTimeRef.current > 0.25 ? currentTimeRef.current : initialResumeSec;
@@ -1481,8 +1609,18 @@ export function VinylPlayer() {
             }
           },
           onStateChange: (ev) => {
-            if (ev.data === 1 && !ev.target.isMuted?.()) {
-              setAudioUnlockNeeded(false);
+            if (ev.data === 1) {
+              if (!isMutedRef.current) {
+                if ((ev.target.getVolume?.() ?? 100) < 5 && volumeRampRafRef.current === 0) {
+                  ev.target.setVolume(Math.round(volumeRef.current * 100));
+                }
+
+                if (!ev.target.isMuted?.()) {
+                  setAudioUnlockNeeded(false);
+                }
+              } else {
+                setAudioUnlockNeeded(false);
+              }
             }
 
             // 0 = ENDED
@@ -1527,7 +1665,7 @@ export function VinylPlayer() {
     const initYtPlayer = () => {
       if (ytPlayerRef.current) return;
 
-      spawnYtPlayer(YT_PRIMARY_HOST, currentTrackRef.current.youtubeId || 'boMFsedHSBg', 0);
+      spawnYtPlayer(YT_PRIMARY_HOST, currentTrackRef.current.youtubeId || 'BLYMjHAa0sE', 0);
     };
 
     let scriptElForCleanup: HTMLElement | null = null;
@@ -1760,6 +1898,8 @@ export function VinylPlayer() {
     loadAndPlayTrack(currentTrackRef.current, true);
   }, [cancelVolumeRamp, canUseYouTube, loadAndPlayTrack, primeAudioOnGesture, scheduleYouTubePlaybackCheck]);
 
+  unmuteOrStartRef.current = unmuteOrStartCurrentTrack;
+
   // Play / Pause toggle (when autoplay arrived muted/locked, clicking Play/Pause or Disc unlocks sound instead of silencing)
   const handleTogglePlay = useCallback(() => {
     if (performance.now() - justUnlockedAtRef.current < 450) {
@@ -1877,16 +2017,29 @@ export function VinylPlayer() {
     unmuteOrStartCurrentTrack,
   ]);
 
-  // Resume blocked scroll autoplay instantaneously on next user interaction anywhere
+  // Resume blocked scroll autoplay instantaneously on next valid browser user activation anywhere
   useEffect(() => {
     if (!audioUnlockNeeded) return;
 
-    window.addEventListener('pointerdown', unmuteOrStartCurrentTrack, { once: true, capture: true });
-    window.addEventListener('keydown', unmuteOrStartCurrentTrack, { once: true, capture: true });
+    const wakeUnlockedAudio = (e: Event) => {
+      if (
+        e.target instanceof Element &&
+        e.target.closest('[data-mute-toggle],[data-track-item],[data-side-pill]')
+      ) {
+        return;
+      }
+
+      unmuteOrStartCurrentTrack();
+    };
+
+    ACTIVATION_EVENTS.forEach((evt) => {
+      window.addEventListener(evt, wakeUnlockedAudio, { capture: true, passive: true });
+    });
 
     return () => {
-      window.removeEventListener('pointerdown', unmuteOrStartCurrentTrack, { capture: true });
-      window.removeEventListener('keydown', unmuteOrStartCurrentTrack, { capture: true });
+      ACTIVATION_EVENTS.forEach((evt) => {
+        window.removeEventListener(evt, wakeUnlockedAudio, { capture: true });
+      });
     };
   }, [audioUnlockNeeded, unmuteOrStartCurrentTrack]);
 
@@ -2028,52 +2181,144 @@ export function VinylPlayer() {
     }
 
     // Final exact seek on release so YouTube & HTML audio snap crisply to spun timestamp
-    seekAudioEngine(currentTimeRef.current);
+    seekAudioEngine(currentTimeRef.current, true);
   };
 
-  // Seek bar click
-  const handleSeekBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const seekToClientX = (clientX: number, resumeIfStalled: boolean) => {
     if (!seekBarRef.current) return;
 
     const rect = seekBarRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    seekAudioEngine(ratio * trackDuration);
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    seekAudioEngine(ratio * trackDuration, resumeIfStalled);
   };
 
-  // Volume change
+  const handlePointerDownSeekBar = (e: PointerEvent<HTMLDivElement>) => {
+    hasUserGestureRef.current = true;
+    isScrubbingSeekRef.current = true;
+    seekToClientX(e.clientX, false);
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignored
+    }
+  };
+
+  const handlePointerMoveSeekBar = (e: PointerEvent<HTMLDivElement>) => {
+    if (!isScrubbingSeekRef.current) return;
+
+    seekToClientX(e.clientX, false);
+  };
+
+  const handlePointerUpSeekBar = (e: PointerEvent<HTMLDivElement>) => {
+    if (!isScrubbingSeekRef.current) return;
+
+    isScrubbingSeekRef.current = false;
+    lastSeekPointerUpAtRef.current = performance.now();
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignored
+    }
+
+    seekToClientX(e.clientX, true);
+  };
+
+  // Seek bar click fallback (e.g. keyboard or synthetic click)
+  const handleSeekBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (performance.now() - lastSeekPointerUpAtRef.current < 120) {
+      return;
+    }
+
+    hasUserGestureRef.current = true;
+    seekToClientX(e.clientX, true);
+  };
+
+  // Volume change (also unmutes and nudges playback if an active track had arrived silent/stalled)
   const handleVolumeChange = (nextVol: number) => {
+    hasUserGestureRef.current = true;
     cancelVolumeRamp();
     setVolume(nextVol);
-    setIsMuted(nextVol === 0);
+    volumeRef.current = nextVol;
+    const nextMuted = nextVol === 0;
+    setIsMuted(nextMuted);
+    isMutedRef.current = nextMuted;
+
+    if (!nextMuted) {
+      setAudioUnlockNeeded(false);
+    }
 
     if (htmlAudioRef.current) {
-      htmlAudioRef.current.muted = nextVol === 0;
+      htmlAudioRef.current.muted = nextMuted;
       htmlAudioRef.current.volume = nextVol;
+
+      if (!nextMuted && isPlayingRef.current && activeEngineRef.current !== 'youtube' && htmlAudioRef.current.paused) {
+        void htmlAudioRef.current.play().catch(() => {});
+      }
     }
 
     if (ytPlayerRef.current && ytReadyRef.current) {
       ytPlayerRef.current.setVolume(Math.round(nextVol * 100));
 
-      if (nextVol === 0) ytPlayerRef.current.mute();
-      else ytPlayerRef.current.unMute();
+      if (nextMuted) {
+        ytPlayerRef.current.mute();
+      } else {
+        ytPlayerRef.current.unMute();
+
+        if (isPlayingRef.current && activeEngineRef.current === 'youtube') {
+          try {
+            const st = ytPlayerRef.current.getPlayerState?.();
+
+            if (st !== 1 && st !== 3) {
+              ytPlayerRef.current.playVideo();
+            }
+          } catch {
+            // Ignored
+          }
+        }
+      }
     }
   };
 
   const handleToggleMute = () => {
+    hasUserGestureRef.current = true;
     cancelVolumeRamp();
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    isMutedRef.current = nextMuted;
+
+    if (!nextMuted) {
+      setAudioUnlockNeeded(false);
+    }
 
     if (htmlAudioRef.current) {
       htmlAudioRef.current.muted = nextMuted;
       htmlAudioRef.current.volume = nextMuted ? 0 : volume;
+
+      if (!nextMuted && isPlayingRef.current && activeEngineRef.current !== 'youtube' && htmlAudioRef.current.paused) {
+        void htmlAudioRef.current.play().catch(() => {});
+      }
     }
 
     if (ytPlayerRef.current && ytReadyRef.current) {
-      if (nextMuted) ytPlayerRef.current.mute();
-      else {
+      if (nextMuted) {
+        ytPlayerRef.current.mute();
+      } else {
         ytPlayerRef.current.unMute();
         ytPlayerRef.current.setVolume(Math.round(volume * 100));
+
+        if (isPlayingRef.current && activeEngineRef.current === 'youtube') {
+          try {
+            const st = ytPlayerRef.current.getPlayerState?.();
+
+            if (st !== 1 && st !== 3) {
+              ytPlayerRef.current.playVideo();
+            }
+          } catch {
+            // Ignored
+          }
+        }
       }
     }
   };
@@ -2090,7 +2335,7 @@ export function VinylPlayer() {
       className={
         prefersReducedMotion
           ? 'relative min-h-screen py-24 sm:py-32 px-4 sm:px-6 max-w-6xl mx-auto z-10 select-none overflow-x-clip'
-          : 'relative min-h-[305vh] lg:min-h-[295vh] z-10 select-none overflow-x-clip'
+          : 'relative min-h-[192vh] lg:min-h-[186vh] z-10 select-none overflow-x-clip'
       }
     >
       {/* Navigation target anchored at settled morph completion */}
@@ -2115,11 +2360,32 @@ export function VinylPlayer() {
         className={
           prefersReducedMotion
             ? 'w-full px-4 sm:px-6 max-w-6xl mx-auto py-16'
-            : 'sticky top-0 min-h-screen w-full flex flex-col justify-start lg:justify-center pt-20 pb-4 lg:py-20 px-4 sm:px-6 max-w-6xl mx-auto'
+            : 'sticky top-0 min-h-screen w-full flex flex-col justify-start lg:justify-center pt-[88px] pb-4 lg:pt-[88px] lg:pb-4 px-4 sm:px-6 max-w-6xl mx-auto'
         }
       >
-        {/* Section Title & Playlist Side Switcher (scroll-morphed from centered title) */}
-        <div ref={titleBlockRef} className="w-full text-center mb-3 sm:mb-8 lg:mb-10">
+        {/* Subtle transient vinyl-groove resonance halo during arrival morph (dissolves before turntable lands) */}
+        {!prefersReducedMotion && (
+          <div
+            className="absolute inset-x-0 top-0 h-screen flex items-center justify-center pointer-events-none"
+            aria-hidden="true"
+          >
+            <motion.div
+              style={{
+                opacity: haloOpacity,
+                scale: haloScale,
+                rotate: haloRotate,
+                willChange: 'transform, opacity',
+              }}
+              className="relative w-56 h-56 sm:w-72 sm:h-72 rounded-full border border-[#BBD2EF]/35"
+            >
+              <div className="absolute inset-5 rounded-full border border-[#D7E6F8]/20" />
+              <div className="absolute inset-11 rounded-full border border-[#BBD2EF]/15" />
+            </motion.div>
+          </div>
+        )}
+
+        {/* Section Title & Playlist Side Switcher (continuous radial-to-turntable morph) */}
+        <div ref={titleBlockRef} className="w-full text-center mb-3 sm:mb-7 lg:mb-5">
           {prefersReducedMotion ? (
             <h2
               className="font-display italic tracking-tight heading-luminous select-text w-full max-w-4xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance text-center"
@@ -2130,7 +2396,7 @@ export function VinylPlayer() {
           ) : (
             <motion.h2
               ref={headingRef}
-              className="font-display italic tracking-tight select-text w-full max-w-4xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance text-center"
+              className="font-display italic tracking-tight heading-luminous select-text w-full max-w-4xl mx-auto px-2 sm:px-0 leading-[1.15] text-balance text-center"
               style={{
                 fontSize: 'clamp(1.38rem, 4.1vw, 3.05rem)',
                 opacity: titleOpacity,
@@ -2139,17 +2405,12 @@ export function VinylPlayer() {
                 willChange: 'transform, opacity',
               }}
             >
-              <ScrollLitSentence
-                text="Songs that we've listened all throughout the years"
-                progress={morphProgress}
-                sweepStart={0.08}
-                sweepEnd={0.58}
-              />
+              Songs that we&apos;ve listened all throughout the years
             </motion.h2>
           )}
 
           <motion.div
-            className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-2.5 sm:mt-5"
+            className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-2 sm:mt-3.5"
             style={
               prefersReducedMotion
                 ? undefined
@@ -2166,6 +2427,7 @@ export function VinylPlayer() {
               return (
                 <button
                   key={pl.id}
+                  data-side-pill="true"
                   onClick={() => handleSelectSide(idx)}
                   className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-[11px] sm:text-xs font-mono-code transition-all duration-300 cursor-pointer flex items-center gap-2 sm:gap-2.5 active:scale-95 ${
                     isActive
@@ -2258,64 +2520,69 @@ export function VinylPlayer() {
               </div>
 
               {/* Interactive Vinyl Record (1:1 Cursor-Spinnable with Momentum) */}
-              <div
-                ref={vinylDiscRef}
-                onPointerDown={handlePointerDownVinyl}
-                onPointerMove={handlePointerMoveVinyl}
-                onPointerUp={handlePointerUpVinyl}
-                onPointerCancel={handlePointerUpVinyl}
-                className={`relative w-[92%] h-[92%] rounded-full select-none touch-none flex items-center justify-center transition-shadow duration-300 ${
-                  isDraggingDisc ? 'cursor-grabbing' : 'cursor-grab'
-                }`}
-                style={{
-                  background: `
-                    repeating-radial-gradient(
-                      circle at center,
-                      rgba(15, 17, 23, 0.96) 0px,
-                      rgba(8, 9, 13, 0.98) 2px,
-                      rgba(24, 27, 36, 0.85) 3px,
-                      rgba(8, 9, 13, 0.98) 5px
-                    )
-                  `,
-                  boxShadow: isPlaying || isDraggingDisc
-                    ? '0 22px 55px rgba(0,0,0,0.95), 0 0 32px rgba(255,255,255,0.12), inset 0 0 0 2px rgba(255,255,255,0.1)'
-                    : '0 18px 45px rgba(0,0,0,0.9), inset 0 0 0 2px rgba(255,255,255,0.06)',
-                }}
-                title="Click to play or pause · Drag with cursor to spin & scrub"
+              <motion.div
+                className="w-[92%] h-[92%] flex items-center justify-center"
+                style={prefersReducedMotion ? undefined : { rotate: discIntroRotate }}
               >
-                {/* Reflective Anisotropic Vinyl Sheen (rotates dynamically with the record) */}
                 <div
-                  className="absolute inset-0 rounded-full pointer-events-none opacity-30"
+                  ref={vinylDiscRef}
+                  onPointerDown={handlePointerDownVinyl}
+                  onPointerMove={handlePointerMoveVinyl}
+                  onPointerUp={handlePointerUpVinyl}
+                  onPointerCancel={handlePointerUpVinyl}
+                  className={`relative w-full h-full rounded-full select-none touch-none flex items-center justify-center transition-shadow duration-300 ${
+                    isDraggingDisc ? 'cursor-grabbing' : 'cursor-grab'
+                  }`}
                   style={{
-                    background:
-                      'conic-gradient(from 25deg, transparent 0deg, rgba(215,230,248,0.28) 38deg, transparent 78deg, transparent 180deg, rgba(187,210,239,0.25) 218deg, transparent 258deg)',
+                    background: `
+                      repeating-radial-gradient(
+                        circle at center,
+                        rgba(15, 17, 23, 0.96) 0px,
+                        rgba(8, 9, 13, 0.98) 2px,
+                        rgba(24, 27, 36, 0.85) 3px,
+                        rgba(8, 9, 13, 0.98) 5px
+                      )
+                    `,
+                    boxShadow: isPlaying || isDraggingDisc
+                      ? '0 22px 55px rgba(0,0,0,0.95), 0 0 32px rgba(255,255,255,0.12), inset 0 0 0 2px rgba(255,255,255,0.1)'
+                      : '0 18px 45px rgba(0,0,0,0.9), inset 0 0 0 2px rgba(255,255,255,0.06)',
                   }}
-                />
+                  title="Click to play or pause · Drag with cursor to spin & scrub"
+                >
+                  {/* Reflective Anisotropic Vinyl Sheen (rotates dynamically with the record) */}
+                  <div
+                    className="absolute inset-0 rounded-full pointer-events-none opacity-30"
+                    style={{
+                      background:
+                        'conic-gradient(from 25deg, transparent 0deg, rgba(215,230,248,0.28) 38deg, transparent 78deg, transparent 180deg, rgba(187,210,239,0.25) 218deg, transparent 258deg)',
+                    }}
+                  />
 
-                {/* Outer Vinyl Lead-in Rim Ring */}
-                <div className="absolute inset-2 rounded-full border border-white/10 pointer-events-none" />
-                <div className="absolute inset-12 rounded-full border border-[#BBD2EF]/10 pointer-events-none" />
+                  {/* Outer Vinyl Lead-in Rim Ring */}
+                  <div className="absolute inset-2 rounded-full border border-white/10 pointer-events-none" />
+                  <div className="absolute inset-12 rounded-full border border-[#BBD2EF]/10 pointer-events-none" />
 
-                {/* Center Label with Live Track Album Artwork */}
-                <div className="relative w-20 h-20 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-full p-1 bg-gradient-to-br from-[#BBD2EF]/60 via-[#101A35] to-[#080E20] shadow-[0_0_25px_rgba(0,0,0,0.9)] flex items-center justify-center pointer-events-none">
-                  <div className="relative w-full h-full rounded-full overflow-hidden border border-white/25 flex items-center justify-center">
-                    <img
-                      src={currentTrack.coverUrl || currentSide.coverUrl}
-                      alt={`${currentTrack.title} album art`}
-                      decoding="async"
-                      className="w-full h-full object-cover"
-                    />
+                  {/* Center Label with Live Track Album Artwork */}
+                  <div className="relative w-20 h-20 sm:w-32 sm:h-32 lg:w-36 lg:h-36 rounded-full p-1 bg-gradient-to-br from-[#BBD2EF]/60 via-[#101A35] to-[#080E20] shadow-[0_0_25px_rgba(0,0,0,0.9)] flex items-center justify-center pointer-events-none">
+                    <div className="relative w-full h-full rounded-full overflow-hidden border border-white/25 flex items-center justify-center">
+                      <img
+                        src={currentTrack.coverUrl || currentSide.coverUrl}
+                        alt={`${currentTrack.title} album art`}
+                        decoding="async"
+                        className="w-full h-full object-cover"
+                      />
 
-                    {/* Subtle center label ring */}
-                    <div className="absolute inset-0 rounded-full shadow-[inset_0_0_16px_rgba(8,14,32,0.55)]" />
+                      {/* Subtle center label ring */}
+                      <div className="absolute inset-0 rounded-full shadow-[inset_0_0_16px_rgba(8,14,32,0.55)]" />
 
-                    {/* Brushed Metal Spindle */}
-                    <div className="absolute w-5 h-5 rounded-full bg-[#080E20] border-2 border-[#D7E6F8]/70 shadow-[0_2px_6px_rgba(0,0,0,0.9)] flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#BBD2EF]/80" />
+                      {/* Brushed Metal Spindle */}
+                      <div className="absolute w-5 h-5 rounded-full bg-[#080E20] border-2 border-[#D7E6F8]/70 shadow-[0_2px_6px_rgba(0,0,0,0.9)] flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#BBD2EF]/80" />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Clean Transport Controls (Play/Pause, Prev, Next, Shuffle) */}
@@ -2429,9 +2696,18 @@ export function VinylPlayer() {
             <div className="space-y-3">
               <div
                 ref={seekBarRef}
+                role="slider"
+                aria-label="Seek track progress"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(trackDuration || 100)}
+                aria-valuenow={Math.round(currentTime)}
+                onPointerDown={handlePointerDownSeekBar}
+                onPointerMove={handlePointerMoveSeekBar}
+                onPointerUp={handlePointerUpSeekBar}
+                onPointerCancel={handlePointerUpSeekBar}
                 onClick={handleSeekBarClick}
-                className="relative w-full h-2.5 bg-white/10 rounded-full overflow-hidden cursor-pointer group"
-                title="Click anywhere to seek"
+                className="relative w-full h-2.5 bg-white/10 rounded-full overflow-hidden cursor-pointer touch-none group"
+                title="Click or drag anywhere to seek"
               >
                 <div
                   className="h-full bg-gradient-to-r from-[#101A35] via-[#BBD2EF] to-[#EDF4FF] rounded-full transition-all duration-100 shadow-[0_0_10px_#BBD2EF]"
@@ -2445,6 +2721,7 @@ export function VinylPlayer() {
                 {/* Compact Volume Control */}
                 <div className="flex items-center gap-2">
                   <button
+                    data-mute-toggle="true"
                     onClick={handleToggleMute}
                     className="text-[#7186A9] hover:text-[#BBD2EF] transition-colors cursor-pointer"
                     aria-label={isMuted ? 'Unmute' : 'Mute'}
@@ -2498,6 +2775,7 @@ export function VinylPlayer() {
                     <button
                       key={`${track.id}-${idx}`}
                       data-track-idx={idx}
+                      data-track-item="true"
                       aria-current={isCurrent ? 'true' : undefined}
                       onClick={() => handleSelectTrack(idx)}
                       className={`flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${
